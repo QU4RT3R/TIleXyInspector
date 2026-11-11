@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NPC 좌표 설정기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* layout: 상단 바(날짜·모드) + 3단(설정 | 맵 | 인스펙터), 맵만 스크롤 */
+:root{
+  --bg:#f3f4f8; --panel:#ffffff; --line:#d9dce6; --ink:#232634; --dim:#6a6f85; --accent:#5b54d6; --accent-ink:#ffffff;
+  --p-red:#f6b8b8; --p-blue:#b5d2f7; --p-green:#b4e3bd; --cell-ink:#2b2d3a;
+  --body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --left-w:17%; --cell:32px; --cell-op:1;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){--bg:#17181f;--panel:#20222c;--line:#363949;--ink:#e8e9f1;--dim:#9a9fb6;--accent:#a29cff;--accent-ink:#17181f;color-scheme:dark}
+}
+:root[data-theme="dark"]{--bg:#17181f;--panel:#20222c;--line:#363949;--ink:#e8e9f1;--dim:#9a9fb6;--accent:#a29cff;--accent-ink:#17181f;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--body);display:flex;flex-direction:column}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+header{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding:8px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+h1{font-size:16px;margin:0;font-weight:700;letter-spacing:-.01em}
+.grp{display:flex;align-items:center;gap:6px}
+.lbl{color:var(--dim);font-size:12px}
+select,input[type=number],input[type=text]{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 6px;min-width:0}
+.btn{background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:4px 10px;cursor:pointer}
+.btn:hover{border-color:var(--accent)}
+.btn.pri{background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:500}
+.seg{display:flex;border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.seg button{border:0;background:var(--bg);padding:4px 10px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--accent-ink)}
+.legend{display:flex;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--dim);margin-left:auto}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:4px}
+main{flex:1;display:flex;min-height:0}
+aside{background:var(--panel);overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:16px}
+#left{width:var(--left-w);min-width:190px;max-width:45%;flex:none}
+#right{width:17%;min-width:200px;flex:none;border-left:1px solid var(--line)}
+#grip{width:6px;flex:none;cursor:col-resize;background:var(--line);touch-action:none}
+#grip:hover{background:var(--accent)}
+section h2{font-size:12px;margin:0 0 6px;color:var(--dim);font-weight:500;text-transform:none;border-bottom:1px solid var(--line);padding-bottom:4px}
+section{display:flex;flex-direction:column;gap:6px}
+.row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.row label{flex:1 1 70px;font-size:13px}
+.row select,.row input[type=number]{flex:1 1 70px}
+.hint{font-size:12px;color:var(--dim);margin:0}
+#stage{flex:1;min-width:0;overflow:auto;padding:16px}
+#wrap{position:relative;width:max-content}
+#bgimg{position:absolute;left:0;top:0;max-width:none;pointer-events:none;display:none}
+#grid{position:relative;display:grid;grid-template-columns:repeat(var(--cols),var(--cell));grid-auto-rows:var(--cell);gap:1px}
+.c{padding:0;border:0;border-radius:3px;font:600 calc(var(--cell)*.42)/1 var(--mono);color:var(--cell-ink);display:flex;align-items:center;justify-content:center;overflow:hidden;opacity:var(--cell-op);user-select:none;-webkit-user-select:none;touch-action:manipulation}
+.blk{background:var(--p-red)}
+button.c{cursor:pointer}
+.off{background:var(--p-blue);box-shadow:inset 0 -3px 0 rgba(0,0,0,.18),inset 0 0 0 1px rgba(0,0,0,.08)}
+.off:hover{filter:brightness(1.06)}
+.on{background:var(--p-green);box-shadow:inset 0 3px 0 rgba(0,0,0,.22),inset 0 0 0 1px rgba(0,0,0,.12)}
+.fix{box-shadow:inset 0 3px 0 rgba(0,0,0,.22),inset 0 0 0 1px rgba(0,0,0,.12)}
+.org{outline:2px solid var(--ink);outline-offset:-2px}
+body[data-mode=edit] .c,body[data-mode=origin] .c{cursor:crosshair}
+.coord{font-family:var(--mono);font-variant-numeric:tabular-nums}
+#hover{font:600 20px var(--mono);font-variant-numeric:tabular-nums}
+ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+li{display:flex;align-items:center;gap:6px}
+li input{flex:1;min-width:0;padding:2px 6px}
+li .coord{flex:none;font-size:12px}
+li .x{border:0;background:none;color:var(--dim);cursor:pointer;padding:0 4px}
+.sw{width:14px;height:14px;border-radius:3px;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:var(--cell-ink)}
+.empty{color:var(--dim);font-size:12px}
+dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:16px;width:min(360px,calc(100% - 32px))}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog h3{margin:0 0 10px;font-size:15px}
+dialog form{display:flex;flex-direction:column;gap:10px}
+.picks{display:flex;flex-wrap:wrap;gap:6px}
+.picks button{width:30px;height:30px;border-radius:6px;border:2px solid transparent;cursor:pointer;background:var(--bg);font-size:15px;color:var(--ink);padding:0}
+.picks button[aria-pressed=true]{border-color:var(--ink)}
+.picks.col button{color:var(--cell-ink)}
+textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:6px}
+#toast{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:6px 14px;border-radius:20px;font-size:13px;opacity:0;pointer-events:none;transition:opacity .2s}
+#toast.show{opacity:1}
+@media (max-width:760px){
+  main{flex-direction:column;overflow:auto}
+  #left,#right{width:auto;max-width:none;flex:none;overflow:visible;border:0;border-bottom:1px solid var(--line)}
+  #grip{display:none}
+  #stage{flex:none;max-height:70vh}
+}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}}
+</style>
+</head>
+<body data-mode="place">
+<header>
+  <h1>NPC 좌표 설정기</h1>
+  <div class="grp">
+    <span class="lbl">날짜</span>
+    <button class="btn" id="prevDay" aria-label="이전 날짜">◀</button>
+    <select id="dateSel" aria-label="날짜 선택"></select>
+    <button class="btn" id="nextDay" aria-label="다음 날짜">▶</button>
+  </div>
+  <div class="grp">
+    <span class="lbl">클릭 동작</span>
+    <div class="seg" id="modes">
+      <button data-mode="place" aria-pressed="true">NPC 배치</button>
+      <button data-mode="edit" aria-pressed="false">맵 수정</button>
+      <button data-mode="origin" aria-pressed="false">원점 지정</button>
+    </div>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--p-red)"></i>스폰 불가</span>
+    <span><i style="background:var(--p-blue)"></i>비어 있음</span>
+    <span><i style="background:var(--p-green)"></i>NPC 배치됨</span>
+    <span>꾹 누르기(또는 우클릭) = 고정 NPC</span>
+  </div>
+</header>
+<main>
+  <aside id="left">
+    <section>
+      <h2>파일</h2>
+      <input type="file" id="fileIn" accept=".txt,.json,.csv,text/plain,application/json" hidden>
+      <button class="btn" id="openBtn">좌표 텍스트 / 저장 파일 열기</button>
+      <button class="btn pri" id="saveBtn">저장 파일 받기</button>
+      <p class="hint" id="mapInfo"></p>
+    </section>
+    <section>
+      <h2>좌표 기준</h2>
+      <div class="row"><label for="orgSel">(0,0) 위치</label>
+        <select id="orgSel"><option value="tl">왼쪽 위</option><option value="bl">왼쪽 아래</option><option value="tr">오른쪽 위</option><option value="br">오른쪽 아래</option><option value="custom">직접 지정</option></select></div>
+      <div class="row"><label for="xDir">X가 커지는 방향</label>
+        <select id="xDir"><option value="1">오른쪽</option><option value="-1">왼쪽</option></select></div>
+      <div class="row"><label for="yDir">Y가 커지는 방향</label>
+        <select id="yDir"><option value="-1">위</option><option value="1">아래</option></select></div>
+    </section>
+    <section>
+      <h2>날짜 범위</h2>
+      <div class="row"><label for="yr">연도</label><input type="number" id="yr" min="1" max="9999"></div>
+      <div class="row"><label for="sm">시작</label><select id="sm" aria-label="시작 월"></select><select id="sd" aria-label="시작 일"></select></div>
+      <div class="row"><label for="em">끝</label><select id="em" aria-label="끝 월"></select><select id="ed" aria-label="끝 일"></select></div>
+      <p class="hint" id="rangeInfo"></p>
+    </section>
+    <section>
+      <h2>칸과 배경</h2>
+      <div class="row"><label for="cellPx">한 칸 크기(px)</label><input type="number" id="cellPx" min="6" max="200"></div>
+      <input type="file" id="bgIn" accept="image/*" hidden>
+      <div class="row"><button class="btn" id="bgBtn">배경 이미지 넣기</button><button class="btn" id="bgDel">제거</button></div>
+      <div class="row"><label for="cellOp">칸 불투명도</label><input type="range" id="cellOp" min="10" max="100" step="5"></div>
+    </section>
+  </aside>
+  <div id="grip" role="separator" aria-label="왼쪽 패널 너비 조절"></div>
+  <div id="stage"><div id="wrap"><img id="bgimg" alt=""><div id="grid"></div></div></div>
+  <aside id="right">
+    <section>
+      <h2>마우스 위치</h2>
+      <div id="hover">x –, y –</div>
+    </section>
+    <section>
+      <h2 id="dayTitle">이 날짜의 NPC</h2>
+      <ul id="dayList"></ul>
+      <div class="row"><button class="btn" id="copyDay">이 날짜 복사</button><button class="btn" id="copyAll">전체 날짜 복사</button></div>
+    </section>
+    <section>
+      <h2>고정 NPC (매일)</h2>
+      <ul id="fixList"></ul>
+    </section>
+  </aside>
+</main>
+
+<dialog id="fixDlg">
+  <form id="fixForm">
+    <h3>고정 NPC <span class="coord" id="fixAt"></span></h3>
+    <label>이름 <input type="text" id="fixName" maxlength="40" style="width:100%"></label>
+    <div><div class="lbl">색</div><div class="picks col" id="fixCols"></div></div>
+    <div><div class="lbl">아이콘</div><div class="picks" id="fixIcons"></div>
+      <label class="lbl">직접 입력 <input type="text" id="fixIconTxt" maxlength="2" style="width:60px"></label></div>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn" id="fixRemove">고정 해제</button>
+      <button type="button" class="btn" id="fixCancel">취소</button>
+      <button type="submit" class="btn pri">저장</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="txtDlg">
+  <h3 id="txtTitle"></h3>
+  <p class="hint" id="txtHint"></p>
+  <textarea id="txtArea" readonly></textarea>
+  <div class="row" style="justify-content:flex-end;margin-top:8px"><button class="btn" id="txtClose">닫기</button></div>
+</dialog>
+<div id="toast" role="status"></div>
+
+<script>
+const $=id=>document.getElementById(id);
+const COLORS=[["노랑","#ffe89a"],["주황","#ffc993"],["보라","#d6c4f5"],["분홍","#f9c0dc"],["베이지","#e3cfb4"],["회색","#d0d3da"]];
+const ICONS=["★","♥","◆","●","▲","♣","♪","☕","🏠","🛒","⚔","🎣","🌱","📦","🔨","💤"];
+const LS="npc-coord-setter-v1";
+const EXAMPLE=["1111111100111111","1111111100111111","1100111111111001","1100111111111001","1111110011111111","1111110011111111","0011111111110011","0011111111110011","1111111111111111","1111111111111111"];
+
+function parseText(t){
+  const rows=t.split(/\r?\n/).map(l=>l.trim()).filter(l=>l.length).map(l=>(/[\s,;]/.test(l)?l.split(/[\s,;]+/):[...l]).map(v=>v==="1"?1:0));
+  const w=Math.max(0,...rows.map(r=>r.length));
+  rows.forEach(r=>{while(r.length<w)r.push(0)});
+  return rows;
+}
+function fresh(grid,example){
+  return {v:1,example:!!example,grid,cell:32,cellOp:100,origin:{c:0,r:grid.length-1},xDir:1,yDir:-1,
+    year:new Date().getFullYear(),range:{sm:8,sd:1,em:8,ed:31},cur:"08-01",daily:{},fixed:{},bg:null,leftW:null};
+}
+let S=fresh(parseText(EXAMPLE.join("\n")),true);
+S.daily["08-01"]={"3,8":{name:"우체부"},"10,4":{name:"꽃집 손님"}};
+S.fixed["7,9"]={name:"촌장",color:"#ffe89a",icon:"★"};
+try{const s=localStorage.getItem(LS);if(s){const o=JSON.parse(s);if(o&&o.grid&&o.grid.length)S=o}}catch(e){}
+
+let mode="place",dl=null;
+if(window.claude&&window.claude.use)window.claude.use("downloads").then(d=>{dl=d}).catch(()=>{});
+
+const rows=()=>S.grid.length, cols=()=>S.grid[0]?S.grid[0].length:0;
+const pad=n=>String(n).padStart(2,"0");
+const key=(c,r)=>c+","+r;
+const xy=(c,r)=>({x:(c-S.origin.c)*S.xDir||0,y:(r-S.origin.r)*S.yDir||0});
+const xyTxt=k=>{const[c,r]=k.split(",").map(Number),p=xy(c,r);return`(${p.x}, ${p.y})`};
+const dim=m=>new Date(S.year,m,0).getDate();
+const day=()=>S.daily[S.cur]||{};
+const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
+function persist(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
+let tt;function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2200)}
+
+function dates(){
+  const R=S.range,out=[];
+  R.sd=Math.min(R.sd,dim(R.sm));R.ed=Math.min(R.ed,dim(R.em));
+  let m=R.sm,d=R.sd;
+  for(let i=0;i<366;i++){
+    out.push(pad(m)+"-"+pad(d));
+    if(m===R.em&&d===R.ed)break;
+    d++;if(d>dim(m)){d=1;m=m===12?1:m+1}
+  }
+  return out;
+}
+const dLabel=k=>Number(k.slice(0,2))+"월 "+Number(k.slice(3))+"일";
+
+function renderGrid(){
+  const g=$("grid"),d=day(),order=Object.keys(d);let h="";
+  for(let r=0;r<rows();r++)for(let c=0;c<cols();c++){
+    const k=key(c,r),o=(c===S.origin.c&&r===S.origin.r)?" org":"",at=` data-c="${c}" data-r="${r}"`;
+    if(!S.grid[r][c]){h+=`<div class="c blk${o}"${at}></div>`;continue}
+    const f=S.fixed[k];
+    if(f)h+=`<button class="c fix${o}"${at} style="background:${esc(f.color)}" title="${esc(f.name)} (고정)" aria-pressed="true">${esc(f.icon||"")}</button>`;
+    else if(d[k])h+=`<button class="c on${o}"${at} title="${esc(d[k].name)}" aria-pressed="true">${order.indexOf(k)+1}</button>`;
+    else h+=`<button class="c off${o}"${at} aria-pressed="false"></button>`;
+  }
+  g.style.setProperty("--cols",cols());g.innerHTML=h;
+}
+function renderLists(){
+  const d=day(),ks=Object.keys(d);
+  $("dayTitle").textContent=dLabel(S.cur)+"의 NPC ("+ks.length+")";
+  $("dayList").innerHTML=ks.length?ks.map((k,i)=>`<li><span class="sw" style="background:var(--p-green)">${i+1}</span><input type="text" data-k="${k}" value="${esc(d[k].name)}" aria-label="NPC 이름" maxlength="40"><span class="coord">${xyTxt(k)}</span><button class="x" data-del="${k}" aria-label="삭제">✕</button></li>`).join(""):'<li class="empty">파란 칸을 눌러 NPC를 배치하세요.</li>';
+  const fk=Object.keys(S.fixed);
+  $("fixList").innerHTML=fk.length?fk.map(k=>{const f=S.fixed[k];return`<li><span class="sw" style="background:${esc(f.color)}">${esc(f.icon||"")}</span><span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(f.name)}</span><span class="coord">${xyTxt(k)}</span><button class="x" data-fix="${k}" aria-label="수정">✎</button></li>`}).join(""):'<li class="empty">칸을 꾹 누르면 고정 NPC로 지정됩니다.</li>';
+}
+function renderDates(){
+  const ds=dates();if(!ds.includes(S.cur))S.cur=ds[0];
+  $("dateSel").innerHTML=ds.map(k=>`<option value="${k}"${k===S.cur?" selected":""}>${dLabel(k)}${S.daily[k]&&Object.keys(S.daily[k]).length?" ·":""}</option>`).join("");
+  $("rangeInfo").textContent="총 "+ds.length+"일";
+}
+function fillDays(sel,m,v){sel.innerHTML=Array.from({length:dim(m)},(_,i)=>`<option${i+1===v?" selected":""}>${i+1}</option>`).join("")}
+function renderSettings(){
+  const R=S.range,mo=v=>Array.from({length:12},(_,i)=>`<option value="${i+1}"${i+1===v?" selected":""}>${i+1}월</option>`).join("");
+  $("yr").value=S.year;$("sm").innerHTML=mo(R.sm);$("em").innerHTML=mo(R.em);fillDays($("sd"),R.sm,R.sd);fillDays($("ed"),R.em,R.ed);
+  $("cellPx").value=S.cell;$("cellOp").value=S.cellOp;$("xDir").value=S.xDir;$("yDir").value=S.yDir;
+  const o=S.origin,L=cols()-1,B=rows()-1;
+  $("orgSel").value=o.c===0&&o.r===0?"tl":o.c===0&&o.r===B?"bl":o.c===L&&o.r===0?"tr":o.c===L&&o.r===B?"br":"custom";
+  $("mapInfo").textContent=(S.example?"예시 맵 · ":"")+"가로 "+cols()+" × 세로 "+rows()+"칸";
+  document.documentElement.style.setProperty("--cell",S.cell+"px");
+  document.documentElement.style.setProperty("--cell-op",S.bg?S.cellOp/100:1);
+  if(S.leftW)document.documentElement.style.setProperty("--left-w",S.leftW+"px");
+  const im=$("bgimg");if(S.bg){im.src=S.bg;im.style.display="block"}else{im.removeAttribute("src");im.style.display="none"}
+}
+function all(){renderSettings();renderDates();renderGrid();renderLists();persist()}
+function soft(){renderDates();renderGrid();renderLists();persist()}
+
+function setMode(m){mode=m;document.body.dataset.mode=m;document.querySelectorAll("#modes button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mode===m))}
+$("modes").onclick=e=>{const b=e.target.closest("button");if(b)setMode(b.dataset.mode)};
+
+/* ---- 맵 조작 ---- */
+const cellOf=e=>{const t=e.target.closest(".c");return t?{c:+t.dataset.c,r:+t.dataset.r}:null};
+let pressT=null,longFired=false;
+const grid=$("grid");
+grid.addEventListener("pointerdown",e=>{
+  const p=cellOf(e);longFired=false;clearTimeout(pressT);
+  if(!p||mode!=="place"||!S.grid[p.r][p.c]||e.button)return;
+  pressT=setTimeout(()=>{longFired=true;openFix(key(p.c,p.r))},500);
+});
+["pointerup","pointerleave","pointercancel"].forEach(n=>grid.addEventListener(n,()=>clearTimeout(pressT)));
+grid.addEventListener("contextmenu",e=>{const p=cellOf(e);if(!p)return;e.preventDefault();clearTimeout(pressT);if(mode==="place"&&S.grid[p.r][p.c]&&!$("fixDlg").open){longFired=true;openFix(key(p.c,p.r))}});
+grid.addEventListener("pointermove",e=>{const p=cellOf(e);if(p){const q=xy(p.c,p.r);$("hover").textContent=`x ${q.x}, y ${q.y}`}});
+grid.addEventListener("pointerleave",()=>{$("hover").textContent="x –, y –"});
+grid.addEventListener("click",e=>{
+  const p=cellOf(e);if(!p)return;
+  if(longFired){longFired=false;return}
+  const k=key(p.c,p.r);
+  if(mode==="origin"){S.origin={c:p.c,r:p.r};setMode("place");all();toast("이 칸이 (0, 0)입니다.");return}
+  if(mode==="edit"){
+    S.grid[p.r][p.c]=S.grid[p.r][p.c]?0:1;S.example=false;
+    if(!S.grid[p.r][p.c]){delete S.fixed[k];for(const d in S.daily)delete S.daily[d][k]}
+    renderSettings();soft();return;
+  }
+  if(!S.grid[p.r][p.c])return;
+  if(S.fixed[k]){toast("고정 NPC 칸입니다. 꾹 눌러서 수정하세요.");return}
+  const d=S.daily[S.cur]||(S.daily[S.cur]={});
+  if(d[k])delete d[k];
+  else{const used=new Set(Object.values(d).map(v=>v.name));let n=1;while(used.has("NPC "+n))n++;d[k]={name:"NPC "+n}}
+  soft();
+});
+
+/* ---- 인스펙터 ---- */
+$("dayList").addEventListener("input",e=>{const k=e.target.dataset.k;if(k&&day()[k]){day()[k].name=e.target.value;persist()}});
+$("dayList").addEventListener("click",e=>{const k=e.target.dataset.del;if(k){delete day()[k];soft()}});
+$("fixList").addEventListener("click",e=>{const k=e.target.dataset.fix;if(k)openFix(k)});
+function dayText(k){
+  const d=S.daily[k]||{},L=[];
+  for(const c in d)L.push(d[c].name+"\t"+xyTxt(c).replace(/[() ]/g,"").replace(",","\t"));
+  for(const c in S.fixed)L.push(S.fixed[c].name+" (고정)\t"+xyTxt(c).replace(/[() ]/g,"").replace(",","\t"));
+  return L.join("\n");
+}
+function showText(title,hint,txt){$("txtTitle").textContent=title;$("txtHint").textContent=hint;$("txtArea").value=txt;$("txtDlg").showModal();$("txtArea").select()}
+function copy(txt,title){
+  if(!txt){toast("복사할 NPC가 없습니다.");return}
+  const fb=()=>showText(title,"자동 복사가 막혀 있습니다. 아래 내용을 직접 복사하세요.",txt);
+  try{navigator.clipboard.writeText(txt).then(()=>toast("복사했습니다 (이름, x, y)."),fb)}catch(e){fb()}
+}
+$("copyDay").onclick=()=>copy(dayText(S.cur),dLabel(S.cur));
+$("copyAll").onclick=()=>copy(dates().map(k=>"# "+dLabel(k)+"\n"+dayText(k)).join("\n\n"),"전체 날짜");
+$("txtClose").onclick=()=>$("txtDlg").close();
+
+/* ---- 고정 NPC ---- */
+let fixK=null,fixCol=COLORS[0][1],fixIcon=ICONS[0];
+$("fixCols").innerHTML=COLORS.map(([n,c])=>`<button type="button" data-v="${c}" style="background:${c}" aria-label="${n}" title="${n}"></button>`).join("");
+$("fixIcons").innerHTML=ICONS.map(i=>`<button type="button" data-v="${i}">${i}</button>`).join("");
+function markPicks(){
+  document.querySelectorAll("#fixCols button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===fixCol));
+  document.querySelectorAll("#fixIcons button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.v===fixIcon));
+}
+function openFix(k){
+  if($("fixDlg").open)return;
+  fixK=k;const f=S.fixed[k];
+  $("fixAt").textContent=xyTxt(k);$("fixName").value=f?f.name:"";
+  fixCol=f?f.color:COLORS[0][1];fixIcon=f?f.icon:ICONS[0];
+  $("fixIconTxt").value=f&&!ICONS.includes(f.icon)?f.icon:"";
+  $("fixRemove").style.display=f?"":"none";
+  markPicks();$("fixDlg").showModal();$("fixName").focus();
+}
+$("fixCols").onclick=e=>{const b=e.target.closest("button");if(b){fixCol=b.dataset.v;markPicks()}};
+$("fixIcons").onclick=e=>{const b=e.target.closest("button");if(b){fixIcon=b.dataset.v;$("fixIconTxt").value="";markPicks()}};
+$("fixIconTxt").oninput=e=>{if(e.target.value){fixIcon=e.target.value;markPicks()}};
+$("fixForm").onsubmit=e=>{
+  e.preventDefault();
+  S.fixed[fixK]={name:$("fixName").value.trim()||"고정 NPC",color:fixCol,icon:fixIcon};
+  for(const d in S.daily)delete S.daily[d][fixK];
+  $("fixDlg").close();soft();
+};
+$("fixRemove").onclick=()=>{delete S.fixed[fixK];$("fixDlg").close();soft()};
+$("fixCancel").onclick=()=>$("fixDlg").close();
+
+/* ---- 설정 ---- */
+$("dateSel").onchange=e=>{S.cur=e.target.value;soft()};
+function step(n){const ds=dates(),i=ds.indexOf(S.cur)+n;if(i>=0&&i<ds.length){S.cur=ds[i];soft()}}
+$("prevDay").onclick=()=>step(-1);$("nextDay").onclick=()=>step(1);
+$("orgSel").onchange=e=>{
+  const v=e.target.value,L=cols()-1,B=rows()-1;
+  if(v==="custom"){setMode("origin");toast("(0, 0)으로 삼을 칸을 누르세요.");return}
+  S.origin={tl:{c:0,r:0},bl:{c:0,r:B},tr:{c:L,r:0},br:{c:L,r:B}}[v];all();
+};
+$("xDir").onchange=e=>{S.xDir=+e.target.value;all()};
+$("yDir").onchange=e=>{S.yDir=+e.target.value;all()};
+$("yr").onchange=e=>{S.year=Math.max(1,+e.target.value||S.year);all()};
+[["sm","sm"],["sd","sd"],["em","em"],["ed","ed"]].forEach(([id,f])=>{$(id).onchange=e=>{S.range[f]=parseInt(e.target.value);dates();all()}});
+$("cellPx").onchange=e=>{S.cell=Math.min(200,Math.max(6,+e.target.value||32));all()};
+$("cellOp").oninput=e=>{S.cellOp=+e.target.value;renderSettings();persist()};
+$("bgBtn").onclick=()=>$("bgIn").click();
+$("bgIn").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{S.bg=r.result;if(S.cellOp===100)S.cellOp=55;all();toast("배경을 넣었습니다. 이미지는 원본 크기로 표시됩니다.")};r.readAsDataURL(f);e.target.value=""};
+$("bgDel").onclick=()=>{S.bg=null;all()};
+
+/* ---- 파일 ---- */
+$("openBtn").onclick=()=>$("fileIn").click();
+$("fileIn").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    const t=String(r.result).replace(/^﻿/,"");
+    if(t.trim().startsWith("{")){
+      try{const o=JSON.parse(t);if(!o.grid||!o.grid.length||!o.range)throw 0;S=Object.assign(fresh(o.grid),o);S.example=false;all();toast("저장 파일을 불러왔습니다.")}
+      catch(x){toast("저장 파일을 읽지 못했습니다. 이 도구에서 받은 .json 파일인지 확인하세요.")}
+    }else{
+      const g=parseText(t);
+      if(!g.length||!g[0].length){toast("0과 1로 된 줄을 찾지 못했습니다.");return}
+      const keep={cell:S.cell,cellOp:S.cellOp,year:S.year,range:S.range,cur:S.cur,bg:S.bg,leftW:S.leftW,xDir:S.xDir,yDir:S.yDir};
+      S=Object.assign(fresh(g),keep);if(S.yDir===1)S.origin={c:0,r:0};
+      all();toast("맵을 만들었습니다: "+cols()+" × "+rows()+"칸");
+    }
+  };
+  r.readAsText(f);e.target.value="";
+};
+$("saveBtn").onclick=async()=>{
+  const data=JSON.stringify(S),filename="npc-coords.json";
+  if(dl){try{await dl.save({filename,data});toast("저장 파일을 내보냈습니다.");return}catch(x){if(x&&x.code==="declined")return}}
+  if(!window.claude){
+    try{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type:"application/json"}));a.download=filename;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);return}catch(x){}
+  }
+  showText("저장 파일 내용","이 화면에서는 파일 받기가 막혀 있습니다. 내용을 복사해 npc-coords.json으로 저장하세요.",data);
+};
+
+/* ---- 왼쪽 패널 너비 ---- */
+$("grip").addEventListener("pointerdown",e=>{
+  e.target.setPointerCapture(e.pointerId);
+  const mv=v=>{S.leftW=Math.round(Math.max(190,v.clientX));document.documentElement.style.setProperty("--left-w",S.leftW+"px")};
+  const up=()=>{e.target.removeEventListener("pointermove",mv);e.target.removeEventListener("pointerup",up);persist()};
+  e.target.addEventListener("pointermove",mv);e.target.addEventListener("pointerup",up);
+});
+
+all();
+</script>
+</body>
+</html>
