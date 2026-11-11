@@ -66,11 +66,17 @@ button.c{cursor:pointer}
 body[data-mode=edit] .c,body[data-mode=origin] .c{cursor:crosshair}
 .coord{font-family:var(--mono);font-variant-numeric:tabular-nums}
 #hover{font:600 20px var(--mono);font-variant-numeric:tabular-nums}
-ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
-li{display:flex;align-items:center;gap:6px}
-li input{flex:1;min-width:0;padding:2px 6px}
-li .coord{flex:none;font-size:12px}
-li .x{border:0;background:none;color:var(--dim);cursor:pointer;padding:0 4px}
+table{width:100%;border-collapse:collapse}
+td{padding:3px 4px;border-bottom:1px solid var(--line);vertical-align:middle}
+td.ns{width:1px;user-select:none;-webkit-user-select:none}
+td.nm{overflow-wrap:anywhere;min-width:48px}
+td.nm[contenteditable]{cursor:text;border-radius:4px}
+td.nm[contenteditable]:hover{background:var(--bg)}
+td.coord{text-align:right;font-size:12px;width:1px;white-space:nowrap}
+td .x{border:0;background:none;color:var(--dim);cursor:pointer;padding:0 4px}
+#slotRows{display:flex;flex-direction:column;gap:6px}
+#slotRows div{display:flex;gap:6px}
+#slotRows input{flex:1}
 .sw{width:14px;height:14px;border-radius:3px;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:var(--cell-ink)}
 .empty{color:var(--dim);font-size:12px}
 dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:16px;width:min(360px,calc(100% - 32px))}
@@ -101,6 +107,11 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
     <button class="btn" id="prevDay" aria-label="이전 날짜">◀</button>
     <select id="dateSel" aria-label="날짜 선택"></select>
     <button class="btn" id="nextDay" aria-label="다음 날짜">▶</button>
+  </div>
+  <div class="grp">
+    <span class="lbl">등장 시각</span>
+    <select id="slotSel" aria-label="등장 시각 선택"></select>
+    <button class="btn" id="slotEdit">목록 편집</button>
   </div>
   <div class="grp">
     <span class="lbl">클릭 동작</span>
@@ -159,12 +170,14 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
     </section>
     <section>
       <h2 id="dayTitle">이 날짜의 NPC</h2>
-      <ul id="dayList"></ul>
-      <div class="row"><button class="btn" id="copyDay">이 날짜 복사</button><button class="btn" id="copyAll">전체 날짜 복사</button></div>
+      <table><tbody id="dayList"></tbody></table>
+      <div class="row"><button class="btn pri" id="copyDay">엑셀용 복사</button><button class="btn" id="copyAll">전체 날짜 복사</button></div>
+      <p class="hint">엑셀에 붙여 넣으면 이름 · x · y가 칸마다 들어갑니다. 이름은 눌러서 고칩니다.</p>
     </section>
     <section>
       <h2>고정 NPC (매일)</h2>
-      <ul id="fixList"></ul>
+      <table><tbody id="fixList"></tbody></table>
+      <div class="row"><button class="btn" id="copyFix">엑셀용 복사</button></div>
     </section>
   </aside>
 </main>
@@ -179,6 +192,18 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
     <div class="row" style="justify-content:flex-end">
       <button type="button" class="btn" id="fixRemove">고정 해제</button>
       <button type="button" class="btn" id="fixCancel">취소</button>
+      <button type="submit" class="btn pri">저장</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="slotDlg">
+  <form id="slotForm">
+    <h3>등장 시각 목록</h3>
+    <p class="hint">하루를 나눌 시각 이름을 적으세요 (예: 아침, 낮, 밤). 삭제한 시각에 배치한 NPC도 함께 지워집니다.</p>
+    <div id="slotRows"></div>
+    <div class="row"><button type="button" class="btn" id="slotAdd">+ 시각 추가</button></div>
+    <div class="row" style="justify-content:flex-end">
+      <button type="button" class="btn" id="slotCancel">취소</button>
       <button type="submit" class="btn pri">저장</button>
     </div>
   </form>
@@ -205,13 +230,25 @@ function parseText(t){
   return rows;
 }
 function fresh(grid,example){
-  return {v:1,example:!!example,grid,cell:32,cellOp:100,origin:{c:0,r:grid.length-1},xDir:1,yDir:-1,
+  return {v:2,slots:[{id:"s1",name:"하루 종일"}],slot:"s1",example:!!example,grid,cell:32,cellOp:100,origin:{c:0,r:grid.length-1},xDir:1,yDir:-1,
     year:new Date().getFullYear(),range:{sm:8,sd:1,em:8,ed:31},cur:"08-01",daily:{},fixed:{},bg:null,leftW:null};
 }
 let S=fresh(parseText(EXAMPLE.join("\n")),true);
-S.daily["08-01"]={"3,8":{name:"우체부"},"10,4":{name:"꽃집 손님"}};
+S.daily["08-01"]={s1:{"3,8":{name:"우체부"},"10,4":{name:"꽃집 손님"}}};
+/* v1 저장 파일(등장 시각 없음)을 v2로 올린다: 기존 배치는 첫 시각 "하루 종일"로 들어간다 */
+function migrate(o){
+  if(!o.daily||typeof o.daily!=="object")o.daily={};
+  if(!Array.isArray(o.slots)||!o.slots.length){
+    o.slots=[{id:"s1",name:"하루 종일"}];
+    const nd={};for(const d in o.daily)nd[d]={s1:o.daily[d]||{}};
+    o.daily=nd;
+  }
+  if(!o.slots.some(s=>s.id===o.slot))o.slot=o.slots[0].id;
+  if(!o.fixed)o.fixed={};
+  o.v=2;return o;
+}
 S.fixed["7,9"]={name:"촌장",color:"#ffe89a",icon:"★"};
-try{const s=localStorage.getItem(LS);if(s){const o=JSON.parse(s);if(o&&o.grid&&o.grid.length)S=o}}catch(e){}
+try{const s=localStorage.getItem(LS);if(s){const o=JSON.parse(s);if(o&&o.grid&&o.grid.length)S=migrate(o)}}catch(e){}
 
 let mode="place",dl=null;
 if(window.claude&&window.claude.use)window.claude.use("downloads").then(d=>{dl=d}).catch(()=>{});
@@ -222,7 +259,11 @@ const key=(c,r)=>c+","+r;
 const xy=(c,r)=>({x:(c-S.origin.c)*S.xDir||0,y:(r-S.origin.r)*S.yDir||0});
 const xyTxt=k=>{const[c,r]=k.split(",").map(Number),p=xy(c,r);return`(${p.x}, ${p.y})`};
 const dim=m=>new Date(S.year,m,0).getDate();
-const day=()=>S.daily[S.cur]||{};
+const day=()=>(S.daily[S.cur]||{})[S.slot]||{};
+const xyOf=k=>{const[c,r]=k.split(",").map(Number);return xy(c,r)};
+const slotName=id=>(S.slots.find(s=>s.id===id)||{name:""}).name;
+const has=o=>!!o&&Object.keys(o).length>0;
+function wipeCell(k){for(const d in S.daily)for(const s in S.daily[d])delete S.daily[d][s][k]}
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 function persist(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
 let tt;function toast(m){const t=$("toast");t.textContent=m;t.classList.add("show");clearTimeout(tt);tt=setTimeout(()=>t.classList.remove("show"),2200)}
@@ -254,14 +295,16 @@ function renderGrid(){
 }
 function renderLists(){
   const d=day(),ks=Object.keys(d);
-  $("dayTitle").textContent=dLabel(S.cur)+"의 NPC ("+ks.length+")";
-  $("dayList").innerHTML=ks.length?ks.map((k,i)=>`<li><span class="sw" style="background:var(--p-green)">${i+1}</span><input type="text" data-k="${k}" value="${esc(d[k].name)}" aria-label="NPC 이름" maxlength="40"><span class="coord">${xyTxt(k)}</span><button class="x" data-del="${k}" aria-label="삭제">✕</button></li>`).join(""):'<li class="empty">파란 칸을 눌러 NPC를 배치하세요.</li>';
+  $("dayTitle").textContent=dLabel(S.cur)+(S.slots.length>1?" · "+slotName(S.slot):"")+"의 NPC ("+ks.length+")";
+  $("dayList").innerHTML=ks.length?ks.map((k,i)=>{const p=xyOf(k);return`<tr><td class="ns"><span class="sw" style="background:var(--p-green)">${i+1}</span></td><td class="nm" contenteditable="plaintext-only" data-k="${k}" aria-label="NPC 이름">${esc(d[k].name)}</td><td class="coord">${p.x}</td><td class="coord">${p.y}</td><td class="ns"><button class="x" data-del="${k}" aria-label="삭제">✕</button></td></tr>`}).join(""):'<tr><td class="empty">파란 칸을 눌러 NPC를 배치하세요.</td></tr>';
   const fk=Object.keys(S.fixed);
-  $("fixList").innerHTML=fk.length?fk.map(k=>{const f=S.fixed[k];return`<li><span class="sw" style="background:${esc(f.color)}">${esc(f.icon||"")}</span><span style="flex:1;min-width:0;overflow-wrap:anywhere">${esc(f.name)}</span><span class="coord">${xyTxt(k)}</span><button class="x" data-fix="${k}" aria-label="수정">✎</button></li>`}).join(""):'<li class="empty">칸을 꾹 누르면 고정 NPC로 지정됩니다.</li>';
+  $("fixList").innerHTML=fk.length?fk.map(k=>{const f=S.fixed[k],p=xyOf(k);return`<tr><td class="ns"><span class="sw" style="background:${esc(f.color)}">${esc(f.icon||"")}</span></td><td class="nm">${esc(f.name)}</td><td class="coord">${p.x}</td><td class="coord">${p.y}</td><td class="ns"><button class="x" data-fix="${k}" aria-label="수정">✎</button></td></tr>`}).join(""):'<tr><td class="empty">칸을 꾹 누르면 고정 NPC로 지정됩니다.</td></tr>';
 }
 function renderDates(){
   const ds=dates();if(!ds.includes(S.cur))S.cur=ds[0];
-  $("dateSel").innerHTML=ds.map(k=>`<option value="${k}"${k===S.cur?" selected":""}>${dLabel(k)}${S.daily[k]&&Object.keys(S.daily[k]).length?" ·":""}</option>`).join("");
+  $("dateSel").innerHTML=ds.map(k=>`<option value="${k}"${k===S.cur?" selected":""}>${dLabel(k)}${Object.values(S.daily[k]||{}).some(has)?" ·":""}</option>`).join("");
+  const dd=S.daily[S.cur]||{};
+  $("slotSel").innerHTML=S.slots.map(t=>`<option value="${esc(t.id)}"${t.id===S.slot?" selected":""}>${esc(t.name)}${has(dd[t.id])?" ·":""}</option>`).join("");
   $("rangeInfo").textContent="총 "+ds.length+"일";
 }
 function fillDays(sel,m,v){sel.innerHTML=Array.from({length:dim(m)},(_,i)=>`<option${i+1===v?" selected":""}>${i+1}</option>`).join("")}
@@ -303,35 +346,35 @@ grid.addEventListener("click",e=>{
   if(mode==="origin"){S.origin={c:p.c,r:p.r};setMode("place");all();toast("이 칸이 (0, 0)입니다.");return}
   if(mode==="edit"){
     S.grid[p.r][p.c]=S.grid[p.r][p.c]?0:1;S.example=false;
-    if(!S.grid[p.r][p.c]){delete S.fixed[k];for(const d in S.daily)delete S.daily[d][k]}
+    if(!S.grid[p.r][p.c]){delete S.fixed[k];wipeCell(k)}
     renderSettings();soft();return;
   }
   if(!S.grid[p.r][p.c])return;
   if(S.fixed[k]){toast("고정 NPC 칸입니다. 꾹 눌러서 수정하세요.");return}
-  const d=S.daily[S.cur]||(S.daily[S.cur]={});
+  const dd=S.daily[S.cur]||(S.daily[S.cur]={}),d=dd[S.slot]||(dd[S.slot]={});
   if(d[k])delete d[k];
   else{const used=new Set(Object.values(d).map(v=>v.name));let n=1;while(used.has("NPC "+n))n++;d[k]={name:"NPC "+n}}
   soft();
 });
 
 /* ---- 인스펙터 ---- */
-$("dayList").addEventListener("input",e=>{const k=e.target.dataset.k;if(k&&day()[k]){day()[k].name=e.target.value;persist()}});
+$("dayList").addEventListener("input",e=>{const k=e.target.dataset.k;if(k&&day()[k]){day()[k].name=e.target.textContent.replace(/\s+/g," ").trim();persist()}});
+$("dayList").addEventListener("keydown",e=>{if(e.key==="Enter"&&e.target.dataset.k){e.preventDefault();e.target.blur()}});
+$("dayList").addEventListener("focusout",e=>{if(e.target.dataset&&e.target.dataset.k)renderGrid()});
 $("dayList").addEventListener("click",e=>{const k=e.target.dataset.del;if(k){delete day()[k];soft()}});
 $("fixList").addEventListener("click",e=>{const k=e.target.dataset.fix;if(k)openFix(k)});
-function dayText(k){
-  const d=S.daily[k]||{},L=[];
-  for(const c in d)L.push(d[c].name+"\t"+xyTxt(c).replace(/[() ]/g,"").replace(",","\t"));
-  for(const c in S.fixed)L.push(S.fixed[c].name+" (고정)\t"+xyTxt(c).replace(/[() ]/g,"").replace(",","\t"));
-  return L.join("\n");
-}
+const clean=v=>String(v).replace(/[\t\n\r]+/g," ");
+function slotRows(dk,sid){const d=(S.daily[dk]||{})[sid]||{};return Object.keys(d).map(k=>{const p=xyOf(k);return[clean(d[k].name),p.x,p.y]})}
+const tsv=rows=>rows.map(r=>r.join("\t")).join("\n");
 function showText(title,hint,txt){$("txtTitle").textContent=title;$("txtHint").textContent=hint;$("txtArea").value=txt;$("txtDlg").showModal();$("txtArea").select()}
 function copy(txt,title){
   if(!txt){toast("복사할 NPC가 없습니다.");return}
   const fb=()=>showText(title,"자동 복사가 막혀 있습니다. 아래 내용을 직접 복사하세요.",txt);
-  try{navigator.clipboard.writeText(txt).then(()=>toast("복사했습니다 (이름, x, y)."),fb)}catch(e){fb()}
+  try{navigator.clipboard.writeText(txt).then(()=>toast("복사했습니다. 엑셀에서 붙여 넣으세요."),fb)}catch(e){fb()}
 }
-$("copyDay").onclick=()=>copy(dayText(S.cur),dLabel(S.cur));
-$("copyAll").onclick=()=>copy(dates().map(k=>"# "+dLabel(k)+"\n"+dayText(k)).join("\n\n"),"전체 날짜");
+$("copyDay").onclick=()=>copy(tsv(slotRows(S.cur,S.slot)),dLabel(S.cur));
+$("copyFix").onclick=()=>copy(tsv(Object.keys(S.fixed).map(k=>{const p=xyOf(k);return[clean(S.fixed[k].name),p.x,p.y]})),"고정 NPC");
+$("copyAll").onclick=()=>{const R=[];for(const k of dates())for(const t of S.slots)for(const r of slotRows(k,t.id))R.push([dLabel(k),clean(t.name),...r]);copy(tsv(R),"전체 날짜")};
 $("txtClose").onclick=()=>$("txtDlg").close();
 
 /* ---- 고정 NPC ---- */
@@ -357,7 +400,7 @@ $("fixIconTxt").oninput=e=>{if(e.target.value){fixIcon=e.target.value;markPicks(
 $("fixForm").onsubmit=e=>{
   e.preventDefault();
   S.fixed[fixK]={name:$("fixName").value.trim()||"고정 NPC",color:fixCol,icon:fixIcon};
-  for(const d in S.daily)delete S.daily[d][fixK];
+  wipeCell(fixK);
   $("fixDlg").close();soft();
 };
 $("fixRemove").onclick=()=>{delete S.fixed[fixK];$("fixDlg").close();soft()};
@@ -365,6 +408,22 @@ $("fixCancel").onclick=()=>$("fixDlg").close();
 
 /* ---- 설정 ---- */
 $("dateSel").onchange=e=>{S.cur=e.target.value;soft()};
+$("slotSel").onchange=e=>{S.slot=e.target.value;soft()};
+let slotDraft=[];
+function drawSlots(){$("slotRows").innerHTML=slotDraft.map((t,i)=>`<div><input type="text" id="slotName${i}" data-i="${i}" value="${esc(t.name)}" maxlength="30" aria-label="시각 이름"><button type="button" class="btn" data-rm="${i}" aria-label="삭제"${slotDraft.length<2?" disabled":""}>✕</button></div>`).join("")}
+$("slotEdit").onclick=()=>{slotDraft=S.slots.map(t=>({id:t.id,name:t.name}));drawSlots();$("slotDlg").showModal()};
+$("slotRows").addEventListener("input",e=>{const i=e.target.dataset.i;if(i!==undefined)slotDraft[i].name=e.target.value});
+$("slotRows").addEventListener("click",e=>{const i=e.target.dataset.rm;if(i!==undefined&&slotDraft.length>1){slotDraft.splice(+i,1);drawSlots()}});
+$("slotAdd").onclick=()=>{slotDraft.push({id:"s"+Date.now().toString(36)+slotDraft.length,name:""});drawSlots();const el=$("slotName"+(slotDraft.length-1));if(el)el.focus()};
+$("slotCancel").onclick=()=>$("slotDlg").close();
+$("slotForm").onsubmit=e=>{
+  e.preventDefault();
+  const list=slotDraft.map((t,i)=>({id:t.id,name:t.name.trim()||"시각 "+(i+1)}));
+  const keep=new Set(list.map(t=>t.id));
+  for(const d in S.daily)for(const sid in S.daily[d])if(!keep.has(sid))delete S.daily[d][sid];
+  S.slots=list;if(!keep.has(S.slot))S.slot=list[0].id;
+  $("slotDlg").close();soft();
+};
 function step(n){const ds=dates(),i=ds.indexOf(S.cur)+n;if(i>=0&&i<ds.length){S.cur=ds[i];soft()}}
 $("prevDay").onclick=()=>step(-1);$("nextDay").onclick=()=>step(1);
 $("orgSel").onchange=e=>{
@@ -390,12 +449,12 @@ $("fileIn").onchange=e=>{
   r.onload=()=>{
     const t=String(r.result).replace(/^﻿/,"");
     if(t.trim().startsWith("{")){
-      try{const o=JSON.parse(t);if(!o.grid||!o.grid.length||!o.range)throw 0;S=Object.assign(fresh(o.grid),o);S.example=false;all();toast("저장 파일을 불러왔습니다.")}
+      try{const o=JSON.parse(t);if(!o.grid||!o.grid.length||!o.range)throw 0;S=Object.assign(fresh(o.grid),migrate(o));S.example=false;all();toast("저장 파일을 불러왔습니다.")}
       catch(x){toast("저장 파일을 읽지 못했습니다. 이 도구에서 받은 .json 파일인지 확인하세요.")}
     }else{
       const g=parseText(t);
       if(!g.length||!g[0].length){toast("0과 1로 된 줄을 찾지 못했습니다.");return}
-      const keep={cell:S.cell,cellOp:S.cellOp,year:S.year,range:S.range,cur:S.cur,bg:S.bg,leftW:S.leftW,xDir:S.xDir,yDir:S.yDir};
+      const keep={cell:S.cell,cellOp:S.cellOp,year:S.year,range:S.range,cur:S.cur,bg:S.bg,leftW:S.leftW,xDir:S.xDir,yDir:S.yDir,slots:S.slots,slot:S.slot};
       S=Object.assign(fresh(g),keep);if(S.yDir===1)S.origin={c:0,r:0};
       all();toast("맵을 만들었습니다: "+cols()+" × "+rows()+"칸");
     }
