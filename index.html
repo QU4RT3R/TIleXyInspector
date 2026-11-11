@@ -189,6 +189,7 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
     <div><div class="lbl">색</div><div class="picks col" id="fixCols"></div></div>
     <div><div class="lbl">아이콘</div><div class="picks" id="fixIcons"></div>
       <label class="lbl">직접 입력 <input type="text" id="fixIconTxt" maxlength="2" style="width:60px"></label></div>
+    <div id="fixSlotBox"><div class="lbl">등장 시각 (전부 체크하면 나중에 추가한 시각에도 나옵니다)</div><div class="row" id="fixSlots"></div><p class="hint" id="fixErr"></p></div>
     <div class="row" style="justify-content:flex-end">
       <button type="button" class="btn" id="fixRemove">고정 해제</button>
       <button type="button" class="btn" id="fixCancel">취소</button>
@@ -263,6 +264,8 @@ const day=()=>(S.daily[S.cur]||{})[S.slot]||{};
 const xyOf=k=>{const[c,r]=k.split(",").map(Number);return xy(c,r)};
 const slotName=id=>(S.slots.find(s=>s.id===id)||{name:""}).name;
 const has=o=>!!o&&Object.keys(o).length>0;
+const fixOn=(f,sid)=>!Array.isArray(f.slots)||f.slots.includes(sid);
+const fixSlotTxt=f=>Array.isArray(f.slots)?f.slots.map(slotName).filter(Boolean).join(", "):"모든 시각";
 function wipeCell(k){for(const d in S.daily)for(const s in S.daily[d])delete S.daily[d][s][k]}
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
 function persist(){try{localStorage.setItem(LS,JSON.stringify(S))}catch(e){}}
@@ -286,7 +289,7 @@ function renderGrid(){
   for(let r=0;r<rows();r++)for(let c=0;c<cols();c++){
     const k=key(c,r),o=(c===S.origin.c&&r===S.origin.r)?" org":"",at=` data-c="${c}" data-r="${r}"`;
     if(!S.grid[r][c]){h+=`<div class="c blk${o}"${at}></div>`;continue}
-    const f=S.fixed[k];
+    const f=S.fixed[k]&&fixOn(S.fixed[k],S.slot)?S.fixed[k]:null;
     if(f)h+=`<button class="c fix${o}"${at} style="background:${esc(f.color)}" title="${esc(f.name)} (고정)" aria-pressed="true">${esc(f.icon||"")}</button>`;
     else if(d[k])h+=`<button class="c on${o}"${at} title="${esc(d[k].name)}" aria-pressed="true">${order.indexOf(k)+1}</button>`;
     else h+=`<button class="c off${o}"${at} aria-pressed="false"></button>`;
@@ -298,7 +301,7 @@ function renderLists(){
   $("dayTitle").textContent=dLabel(S.cur)+(S.slots.length>1?" · "+slotName(S.slot):"")+"의 NPC ("+ks.length+")";
   $("dayList").innerHTML=ks.length?ks.map((k,i)=>{const p=xyOf(k);return`<tr><td class="ns"><span class="sw" style="background:var(--p-green)">${i+1}</span></td><td class="nm" contenteditable="plaintext-only" data-k="${k}" aria-label="NPC 이름">${esc(d[k].name)}</td><td class="coord">${p.x}</td><td class="coord">${p.y}</td><td class="ns"><button class="x" data-del="${k}" aria-label="삭제">✕</button></td></tr>`}).join(""):'<tr><td class="empty">파란 칸을 눌러 NPC를 배치하세요.</td></tr>';
   const fk=Object.keys(S.fixed);
-  $("fixList").innerHTML=fk.length?fk.map(k=>{const f=S.fixed[k],p=xyOf(k);return`<tr><td class="ns"><span class="sw" style="background:${esc(f.color)}">${esc(f.icon||"")}</span></td><td class="nm">${esc(f.name)}</td><td class="coord">${p.x}</td><td class="coord">${p.y}</td><td class="ns"><button class="x" data-fix="${k}" aria-label="수정">✎</button></td></tr>`}).join(""):'<tr><td class="empty">칸을 꾹 누르면 고정 NPC로 지정됩니다.</td></tr>';
+  $("fixList").innerHTML=fk.length?fk.map(k=>{const f=S.fixed[k],p=xyOf(k);return`<tr><td class="ns"><span class="sw" style="background:${esc(f.color)}">${esc(f.icon||"")}</span></td><td class="nm">${esc(f.name)}${Array.isArray(f.slots)?`<br><span class="hint">${esc(fixSlotTxt(f))}</span>`:""}</td><td class="coord">${p.x}</td><td class="coord">${p.y}</td><td class="ns"><button class="x" data-fix="${k}" aria-label="수정">✎</button></td></tr>`}).join(""):'<tr><td class="empty">칸을 꾹 누르면 고정 NPC로 지정됩니다.</td></tr>';
 }
 function renderDates(){
   const ds=dates();if(!ds.includes(S.cur))S.cur=ds[0];
@@ -350,7 +353,7 @@ grid.addEventListener("click",e=>{
     renderSettings();soft();return;
   }
   if(!S.grid[p.r][p.c])return;
-  if(S.fixed[k]){toast("고정 NPC 칸입니다. 꾹 눌러서 수정하세요.");return}
+  if(S.fixed[k]&&fixOn(S.fixed[k],S.slot)){toast("고정 NPC 칸입니다. 꾹 눌러서 수정하세요.");return}
   const dd=S.daily[S.cur]||(S.daily[S.cur]={}),d=dd[S.slot]||(dd[S.slot]={});
   if(d[k])delete d[k];
   else{const used=new Set(Object.values(d).map(v=>v.name));let n=1;while(used.has("NPC "+n))n++;d[k]={name:"NPC "+n}}
@@ -373,7 +376,7 @@ function copy(txt,title){
   try{navigator.clipboard.writeText(txt).then(()=>toast("복사했습니다. 엑셀에서 붙여 넣으세요."),fb)}catch(e){fb()}
 }
 $("copyDay").onclick=()=>copy(tsv(slotRows(S.cur,S.slot)),dLabel(S.cur));
-$("copyFix").onclick=()=>copy(tsv(Object.keys(S.fixed).map(k=>{const p=xyOf(k);return[clean(S.fixed[k].name),p.x,p.y]})),"고정 NPC");
+$("copyFix").onclick=()=>copy(tsv(Object.keys(S.fixed).map(k=>{const p=xyOf(k);return[clean(S.fixed[k].name),p.x,p.y,clean(fixSlotTxt(S.fixed[k]))]})),"고정 NPC");
 $("copyAll").onclick=()=>{const R=[];for(const k of dates())for(const t of S.slots)for(const r of slotRows(k,t.id))R.push([dLabel(k),clean(t.name),...r]);copy(tsv(R),"전체 날짜")};
 $("txtClose").onclick=()=>$("txtDlg").close();
 
@@ -392,6 +395,8 @@ function openFix(k){
   fixCol=f?f.color:COLORS[0][1];fixIcon=f?f.icon:ICONS[0];
   $("fixIconTxt").value=f&&!ICONS.includes(f.icon)?f.icon:"";
   $("fixRemove").style.display=f?"":"none";
+  $("fixSlots").innerHTML=S.slots.map((t,i)=>`<label><input type="checkbox" id="fixSlot${i}" value="${esc(t.id)}"${!f||fixOn(f,t.id)?" checked":""}> ${esc(t.name)}</label>`).join("");
+  $("fixSlotBox").style.display=S.slots.length>1?"":"none";$("fixErr").textContent="";
   markPicks();$("fixDlg").showModal();$("fixName").focus();
 }
 $("fixCols").onclick=e=>{const b=e.target.closest("button");if(b){fixCol=b.dataset.v;markPicks()}};
@@ -399,8 +404,12 @@ $("fixIcons").onclick=e=>{const b=e.target.closest("button");if(b){fixIcon=b.dat
 $("fixIconTxt").oninput=e=>{if(e.target.value){fixIcon=e.target.value;markPicks()}};
 $("fixForm").onsubmit=e=>{
   e.preventDefault();
-  S.fixed[fixK]={name:$("fixName").value.trim()||"고정 NPC",color:fixCol,icon:fixIcon};
-  wipeCell(fixK);
+  const on=[...document.querySelectorAll("#fixSlots input:checked")].map(i=>i.value);
+  if(!on.length){$("fixErr").textContent="등장 시각을 하나 이상 고르세요.";return}
+  const nf={name:$("fixName").value.trim()||"고정 NPC",color:fixCol,icon:fixIcon};
+  if(on.length<S.slots.length)nf.slots=on;
+  S.fixed[fixK]=nf;
+  for(const d in S.daily)for(const sid in S.daily[d])if(fixOn(nf,sid))delete S.daily[d][sid][fixK];
   $("fixDlg").close();soft();
 };
 $("fixRemove").onclick=()=>{delete S.fixed[fixK];$("fixDlg").close();soft()};
@@ -421,6 +430,7 @@ $("slotForm").onsubmit=e=>{
   const list=slotDraft.map((t,i)=>({id:t.id,name:t.name.trim()||"시각 "+(i+1)}));
   const keep=new Set(list.map(t=>t.id));
   for(const d in S.daily)for(const sid in S.daily[d])if(!keep.has(sid))delete S.daily[d][sid];
+  for(const k in S.fixed){const f=S.fixed[k];if(Array.isArray(f.slots)){f.slots=f.slots.filter(id=>keep.has(id));if(!f.slots.length)delete S.fixed[k]}}
   S.slots=list;if(!keep.has(S.slot))S.slot=list[0].id;
   $("slotDlg").close();soft();
 };
