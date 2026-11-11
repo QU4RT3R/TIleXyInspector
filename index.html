@@ -9,7 +9,7 @@
 <style>
 /* layout: 상단 바(날짜·모드) + 3단(설정 | 맵 | 인스펙터), 맵만 스크롤 */
 :root{
-  --bg:#f3f4f8; --panel:#ffffff; --line:#d9dce6; --ink:#232634; --dim:#6a6f85; --accent:#5b54d6; --accent-ink:#ffffff;
+  --bg:#f3f4f8; --panel:#ffffff; --line:#d9dce6; --ink:#232634; --dim:#6a6f85; --accent:#5b54d6; --accent-ink:#ffffff; --sun:#cf4d49; --sat:#3a74cc;
   --p-red:#f6b8b8; --p-blue:#b5d2f7; --p-green:#b4e3bd; --cell-ink:#2b2d3a;
   --body:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
@@ -17,9 +17,9 @@
   color-scheme:light;
 }
 @media (prefers-color-scheme:dark){
-  :root:not([data-theme="light"]){--bg:#17181f;--panel:#20222c;--line:#363949;--ink:#e8e9f1;--dim:#9a9fb6;--accent:#a29cff;--accent-ink:#17181f;color-scheme:dark}
+  :root:not([data-theme="light"]){--bg:#17181f;--panel:#20222c;--line:#363949;--ink:#e8e9f1;--dim:#9a9fb6;--accent:#a29cff;--accent-ink:#17181f;--sun:#ff9d97;--sat:#93bbff;color-scheme:dark}
 }
-:root[data-theme="dark"]{--bg:#17181f;--panel:#20222c;--line:#363949;--ink:#e8e9f1;--dim:#9a9fb6;--accent:#a29cff;--accent-ink:#17181f;color-scheme:dark}
+:root[data-theme="dark"]{--bg:#17181f;--panel:#20222c;--line:#363949;--ink:#e8e9f1;--dim:#9a9fb6;--accent:#a29cff;--accent-ink:#17181f;--sun:#ff9d97;--sat:#93bbff;color-scheme:dark}
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--ink);font:14px/1.5 var(--body);display:flex;flex-direction:column}
@@ -51,8 +51,36 @@ section{display:flex;flex-direction:column;gap:6px}
 .row label{flex:1 1 70px;font-size:13px}
 .row select,.row input[type=number]{flex:1 1 70px}
 .hint{font-size:12px;color:var(--dim);margin:0}
-#stage{flex:1;min-width:0;overflow:auto;padding:16px}
-#wrap{position:relative;width:max-content}
+#stage{flex:1;min-width:0;display:flex}
+#cal{flex:1 1 280px;min-width:260px;overflow:auto}
+#grip2{width:6px;flex:none;cursor:col-resize;background:var(--line);touch-action:none}
+#grip2:hover{background:var(--accent)}
+#mapPane{flex:0 1 auto;min-width:160px;overflow:auto;padding:16px}
+#calHead{position:sticky;top:0;z-index:2;background:var(--panel);padding:10px 12px;display:flex;flex-direction:column;gap:8px;border-bottom:1px solid var(--line)}
+#edTitle{font-size:16px}
+.chk{display:flex;align-items:center;gap:4px;font-size:13px}
+.edg{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px}
+.edg label{display:flex;flex-direction:column;font-size:11px;color:var(--dim);gap:1px}
+.edg .w2{grid-column:span 2}
+.edg input{width:100%;color:var(--ink);font-size:13px}
+#edSp{display:contents}
+.mh{font-size:18px;font-weight:700;margin:0;padding:14px 14px 4px}
+.wk,.mg{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;padding:0 12px}
+.wk{font-size:11px;color:var(--dim);text-align:center;padding-bottom:3px}
+.sun{color:var(--sun)}.sat{color:var(--sat)}
+.mg{padding-bottom:6px}
+.dc{position:relative;min-height:70px;border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);padding:4px 6px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;font-size:11px;line-height:1.35;text-align:left;cursor:pointer;overflow:hidden}
+.dc:hover{border-color:var(--accent)}
+.dc.sel{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent)}
+.dc.closed{background:repeating-linear-gradient(-45deg,var(--panel) 0 6px,var(--bg) 6px 12px);color:var(--dim)}
+.dc .top{display:flex;justify-content:space-between;align-items:baseline;width:100%}
+.dc .dn{font:600 14px var(--mono)}
+.dc.sun .dn{color:var(--sun)}.dc.sat .dn{color:var(--sat)}
+.dc .evp{background:#ffe89a;color:var(--cell-ink);border-radius:6px;padding:0 5px;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dc .spn{color:var(--accent);font-weight:500}
+.dc .npc{position:absolute;right:5px;bottom:2px;font-style:normal;color:#5fae6e;display:none}
+.dc.has .npc{display:block}
+#wrap{position:relative;width:max-content;margin-left:auto}
 #bgimg{position:absolute;left:0;top:0;max-width:none;pointer-events:none;display:none}
 #grid{position:relative;display:grid;grid-template-columns:repeat(var(--cols),var(--cell));grid-auto-rows:var(--cell);gap:1px}
 .c{padding:0;border:0;border-radius:3px;font:600 calc(var(--cell)*.42)/1 var(--mono);color:var(--cell-ink);display:flex;align-items:center;justify-content:center;overflow:hidden;opacity:var(--cell-op);user-select:none;-webkit-user-select:none;touch-action:manipulation}
@@ -94,7 +122,11 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
   main{flex-direction:column;overflow:auto}
   #left,#right{width:auto;max-width:none;flex:none;overflow:visible;border:0;border-bottom:1px solid var(--line)}
   #grip{display:none}
-  #stage{flex:none;max-height:70vh}
+  #stage{flex:none;flex-direction:column}
+  #cal{flex:none !important;max-height:70vh;border-bottom:1px solid var(--line)}
+  #mapPane{flex:none !important;max-height:70vh}
+  #grip2{display:none}
+  .edg{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (prefers-reduced-motion:reduce){#toast{transition:none}}
 </style>
@@ -133,7 +165,7 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
     <section>
       <h2>파일</h2>
       <input type="file" id="fileIn" accept=".txt,.json,.csv,text/plain,application/json" hidden>
-      <button class="btn" id="openBtn">좌표 텍스트 / 저장 파일 열기</button>
+      <button class="btn" id="openBtn">파일 열기 (좌표 · 세이브 · 캘린더 CSV)</button>
       <button class="btn pri" id="saveBtn">저장 파일 받기</button>
       <p class="hint" id="mapInfo"></p>
     </section>
@@ -162,7 +194,23 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
     </section>
   </aside>
   <div id="grip" role="separator" aria-label="왼쪽 패널 너비 조절"></div>
-  <div id="stage"><div id="wrap"><img id="bgimg" alt=""><div id="grid"></div></div></div>
+  <div id="stage">
+    <div id="cal">
+      <div id="calHead">
+        <div class="row"><strong id="edTitle"></strong><label class="chk" for="edClosed"><input type="checkbox" id="edClosed"> 휴무</label><button class="btn" id="copyCal" style="margin-left:auto">엑셀용 복사</button></div>
+        <div class="edg">
+          <label for="edGuests">일반 손님 수<input type="number" id="edGuests" min="0"></label>
+          <label for="edWeather">날씨<input type="text" id="edWeather" list="wxList"></label>
+          <label for="edEvent" class="w2">이벤트<input type="text" id="edEvent" list="evList"></label>
+          <div id="edSp"></div>
+        </div>
+      </div>
+      <div id="calList"></div>
+      <datalist id="wxList"></datalist><datalist id="evList"></datalist>
+    </div>
+    <div id="grip2" role="separator" aria-label="캘린더와 맵 사이 너비 조절"></div>
+    <div id="mapPane"><div id="wrap"><img id="bgimg" alt=""><div id="grid"></div></div></div>
+  </div>
   <aside id="right">
     <section>
       <h2>마우스 위치</h2>
@@ -190,6 +238,8 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
     <div><div class="lbl">아이콘</div><div class="picks" id="fixIcons"></div>
       <label class="lbl">직접 입력 <input type="text" id="fixIconTxt" maxlength="2" style="width:60px"></label></div>
     <div id="fixSlotBox"><div class="lbl">등장 시각 (전부 체크하면 나중에 추가한 시각에도 나옵니다)</div><div class="row" id="fixSlots"></div><p class="hint" id="fixErr"></p></div>
+    <label class="lbl" for="fixEx">제외 날짜 (이 날짜에는 등장하지 않음)<input type="text" id="fixEx" placeholder="예: 7/6, 7/10~7/12" style="width:100%"></label>
+    <div class="row"><button type="button" class="btn" id="fixExNow">지금 보는 날짜 제외</button></div>
     <div class="row" style="justify-content:flex-end">
       <button type="button" class="btn" id="fixRemove">고정 해제</button>
       <button type="button" class="btn" id="fixCancel">취소</button>
@@ -231,7 +281,7 @@ function parseText(t){
   return rows;
 }
 function fresh(grid,example){
-  return {v:2,slots:[{id:"s1",name:"하루 종일"}],slot:"s1",example:!!example,grid,cell:32,cellOp:100,origin:{c:0,r:grid.length-1},xDir:1,yDir:-1,
+  return {v:4,calW:null,cal:{},slots:[{id:"s1",name:"하루 종일"}],slot:"s1",example:!!example,grid,cell:32,cellOp:100,origin:{c:0,r:grid.length-1},xDir:1,yDir:-1,
     year:new Date().getFullYear(),range:{sm:8,sd:1,em:8,ed:31},cur:"08-01",daily:{},fixed:{},bg:null,leftW:null};
 }
 let S=fresh(parseText(EXAMPLE.join("\n")),true);
@@ -246,9 +296,11 @@ function migrate(o){
   }
   if(!o.slots.some(s=>s.id===o.slot))o.slot=o.slots[0].id;
   if(!o.fixed)o.fixed={};
-  o.v=2;return o;
+  if(!o.cal||typeof o.cal!=="object")o.cal={};
+  o.v=4;return o;
 }
 S.fixed["7,9"]={name:"촌장",color:"#ffe89a",icon:"★"};
+S.cal["08-01"]={guests:12,weather:"맑음",event:"여름 축제",special:["haru","mint"]};
 try{const s=localStorage.getItem(LS);if(s){const o=JSON.parse(s);if(o&&o.grid&&o.grid.length)S=migrate(o)}}catch(e){}
 
 let mode="place",dl=null;
@@ -264,7 +316,17 @@ const day=()=>(S.daily[S.cur]||{})[S.slot]||{};
 const xyOf=k=>{const[c,r]=k.split(",").map(Number);return xy(c,r)};
 const slotName=id=>(S.slots.find(s=>s.id===id)||{name:""}).name;
 const has=o=>!!o&&Object.keys(o).length>0;
-const fixOn=(f,sid)=>!Array.isArray(f.slots)||f.slots.includes(sid);
+const fixOn=(f,sid,dk)=>(!Array.isArray(f.slots)||f.slots.includes(sid))&&!(dk&&Array.isArray(f.except)&&f.except.includes(dk));
+const fmtEx=a=>(a||[]).map(k=>+k.slice(0,2)+"/"+ +k.slice(3)).join(", ");
+function parseEx(str){
+  const out=new Set(),one=t=>{const m=t.match(/(\d{1,2})\s*[\/.월]\s*(\d{1,2})/);if(!m)return null;const mo=+m[1],d=+m[2];return mo>=1&&mo<=12&&d>=1&&d<=dim(mo)?[mo,d]:null};
+  for(const tok of String(str).split(/[,，;\n]+/)){
+    const parts=tok.split(/[~\-]/).map(one).filter(Boolean);if(!parts.length)continue;
+    let[m,d]=parts[0];const[em,ed]=parts[parts.length-1];
+    for(let i=0;i<366;i++){out.add(pad(m)+"-"+pad(d));if(m===em&&d===ed)break;d++;if(d>dim(m)){d=1;m=m===12?1:m+1}}
+  }
+  return[...out].sort();
+}
 const fixSlotTxt=f=>Array.isArray(f.slots)?f.slots.map(slotName).filter(Boolean).join(", "):"모든 시각";
 function wipeCell(k){for(const d in S.daily)for(const s in S.daily[d])delete S.daily[d][s][k]}
 const esc=s=>String(s).replace(/[&<>"]/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]));
@@ -289,7 +351,7 @@ function renderGrid(){
   for(let r=0;r<rows();r++)for(let c=0;c<cols();c++){
     const k=key(c,r),o=(c===S.origin.c&&r===S.origin.r)?" org":"",at=` data-c="${c}" data-r="${r}"`;
     if(!S.grid[r][c]){h+=`<div class="c blk${o}"${at}></div>`;continue}
-    const f=S.fixed[k]&&fixOn(S.fixed[k],S.slot)?S.fixed[k]:null;
+    const f=S.fixed[k]&&fixOn(S.fixed[k],S.slot,S.cur)?S.fixed[k]:null;
     if(f)h+=`<button class="c fix${o}"${at} style="background:${esc(f.color)}" title="${esc(f.name)} (고정)" aria-pressed="true">${esc(f.icon||"")}</button>`;
     else if(d[k])h+=`<button class="c on${o}"${at} title="${esc(d[k].name)}" aria-pressed="true">${order.indexOf(k)+1}</button>`;
     else h+=`<button class="c off${o}"${at} aria-pressed="false"></button>`;
@@ -301,7 +363,7 @@ function renderLists(){
   $("dayTitle").textContent=dLabel(S.cur)+(S.slots.length>1?" · "+slotName(S.slot):"")+"의 NPC ("+ks.length+")";
   $("dayList").innerHTML=ks.length?ks.map((k,i)=>{const p=xyOf(k);return`<tr><td class="ns"><span class="sw" style="background:var(--p-green)">${i+1}</span></td><td class="nm" contenteditable="plaintext-only" data-k="${k}" aria-label="NPC 이름">${esc(d[k].name)}</td><td class="coord">${p.x}</td><td class="coord">${p.y}</td><td class="ns"><button class="x" data-del="${k}" aria-label="삭제">✕</button></td></tr>`}).join(""):'<tr><td class="empty">파란 칸을 눌러 NPC를 배치하세요.</td></tr>';
   const fk=Object.keys(S.fixed);
-  $("fixList").innerHTML=fk.length?fk.map(k=>{const f=S.fixed[k],p=xyOf(k);return`<tr><td class="ns"><span class="sw" style="background:${esc(f.color)}">${esc(f.icon||"")}</span></td><td class="nm">${esc(f.name)}${Array.isArray(f.slots)?`<br><span class="hint">${esc(fixSlotTxt(f))}</span>`:""}</td><td class="coord">${p.x}</td><td class="coord">${p.y}</td><td class="ns"><button class="x" data-fix="${k}" aria-label="수정">✎</button></td></tr>`}).join(""):'<tr><td class="empty">칸을 꾹 누르면 고정 NPC로 지정됩니다.</td></tr>';
+  $("fixList").innerHTML=fk.length?fk.map(k=>{const f=S.fixed[k],p=xyOf(k);return`<tr><td class="ns"><span class="sw" style="background:${esc(f.color)}">${esc(f.icon||"")}</span></td><td class="nm">${esc(f.name)}${Array.isArray(f.slots)?`<br><span class="hint">${esc(fixSlotTxt(f))}</span>`:""}${f.except&&f.except.length?`<br><span class="hint">제외 ${esc(fmtEx(f.except))}</span>`:""}</td><td class="coord">${p.x}</td><td class="coord">${p.y}</td><td class="ns"><button class="x" data-fix="${k}" aria-label="수정">✎</button></td></tr>`}).join(""):'<tr><td class="empty">칸을 꾹 누르면 고정 NPC로 지정됩니다.</td></tr>';
 }
 function renderDates(){
   const ds=dates();if(!ds.includes(S.cur))S.cur=ds[0];
@@ -321,10 +383,101 @@ function renderSettings(){
   document.documentElement.style.setProperty("--cell",S.cell+"px");
   document.documentElement.style.setProperty("--cell-op",S.bg?S.cellOp/100:1);
   if(S.leftW)document.documentElement.style.setProperty("--left-w",S.leftW+"px");
+  $("cal").style.flex=S.calW?"0 0 "+S.calW+"px":"";$("mapPane").style.flex=S.calW?"1 1 0":"";
   const im=$("bgimg");if(S.bg){im.src=S.bg;im.style.display="block"}else{im.removeAttribute("src");im.style.display="none"}
 }
-function all(){renderSettings();renderDates();renderGrid();renderLists();persist()}
-function soft(){renderDates();renderGrid();renderLists();persist()}
+/* ---- 캘린더 ---- */
+const DOW="일월화수목금토",WX={"맑음":"☀","흐림":"☁","비":"☂","눈":"❄"};
+let calDow={};
+function dowBase(ds){
+  for(let i=0;i<ds.length;i++){const v=(S.cal[ds[i]]||{}).dow,w=v&&v.length===1?DOW.indexOf(v):-1;if(w>=0)return((w-i)%7+7)%7}
+  if(!ds.length)return 0;
+  const[m,d]=ds[0].split("-").map(Number);return new Date(S.year,m-1,d).getDay();
+}
+function cellHtml(k){
+  const c=S.cal[k]||{},n=(c.special||[]).filter(Boolean).length,wx=c.weather?(WX[c.weather]||esc(c.weather.slice(0,2))):"";
+  return`<span class="top"><b class="dn">${+k.slice(3)}</b><span>${wx}</span></span>`+(c.closed?"<span>휴무</span>":"")+(c.guests!=null?`<span>손님 ${c.guests}</span>`:"")+(c.event?`<span class="evp" title="${esc(c.event)}">${esc(c.event)}</span>`:"")+(n?`<span class="spn">★ ${n}</span>`:"")+'<i class="npc" title="NPC 배치 있음">●</i>';
+}
+function refreshCell(k){const el=document.querySelector(`.dc[data-d="${k}"]`);if(!el)return;el.innerHTML=cellHtml(k);el.classList.toggle("closed",!!(S.cal[k]||{}).closed)}
+function renderCal(){
+  const ds=dates(),base=dowBase(ds);let h="",pm=null,first=false;calDow={};
+  ds.forEach((k,i)=>{
+    const w=(base+i)%7,m=+k.slice(0,2);calDow[k]=w;
+    if(m!==pm){if(pm!==null)h+="</div>";h+=`<h3 class="mh">${m}월</h3><div class="wk">${[...DOW].map((x,j)=>`<span class="${j===0?"sun":j===6?"sat":""}">${x}</span>`).join("")}</div><div class="mg">`;pm=m;first=true}
+    h+=`<button class="dc${w===0?" sun":w===6?" sat":""}" data-d="${k}"${first?` style="grid-column-start:${w+1}"`:""} aria-label="${dLabel(k)}"></button>`;first=false;
+  });
+  if(ds.length)h+="</div>";
+  $("calList").innerHTML=h;ds.forEach(refreshCell);calMark();calLists();
+}
+function calMark(){
+  document.querySelectorAll("#calList .dc").forEach(el=>{
+    const k=el.dataset.d,sel=k===S.cur;
+    el.classList.toggle("has",Object.values(S.daily[k]||{}).some(has));
+    if(sel&&!el.classList.contains("sel")){const b=$("cal"),br=b.getBoundingClientRect(),hh=$("calHead").offsetHeight,er=el.getBoundingClientRect();if(er.top<br.top+hh)b.scrollTop-=br.top+hh-er.top+8;else if(er.bottom>br.bottom)b.scrollTop+=er.bottom-br.bottom+8}
+    el.classList.toggle("sel",sel);
+  });
+  renderEd();
+}
+function renderEd(){
+  const c=S.cal[S.cur]||{},sp=c.special||[],n=Math.max(4,sp.length);
+  $("edTitle").textContent=dLabel(S.cur)+(calDow[S.cur]!==undefined?" ("+DOW[calDow[S.cur]]+")":"");
+  $("edClosed").checked=!!c.closed;$("edGuests").value=c.guests??"";$("edWeather").value=c.weather||"";$("edEvent").value=c.event||"";
+  $("edSp").innerHTML=Array.from({length:n},(_,i)=>`<label for="edSp${i}">특별 손님 ${i+1}<input type="text" id="edSp${i}" data-sp="${i}" value="${esc(sp[i]||"")}" placeholder="이름 또는 ID"></label>`).join("");
+}
+function calLists(){
+  const wx=new Set(Object.keys(WX)),ev=new Set();
+  for(const k in S.cal){if(S.cal[k].weather)wx.add(S.cal[k].weather);if(S.cal[k].event)ev.add(S.cal[k].event)}
+  const o=set=>[...set].map(v=>`<option value="${esc(v)}"></option>`).join("");
+  $("wxList").innerHTML=o(wx);$("evList").innerHTML=o(ev);
+}
+$("calHead").addEventListener("input",e=>{
+  const t=e.target,k=S.cur;if(!t.id||!t.id.startsWith("ed"))return;
+  const c=S.cal[k]||(S.cal[k]={}),v=t.value;
+  if(t.id==="edClosed"){if(t.checked)c.closed=true;else delete c.closed}
+  else if(t.id==="edGuests"){if(v==="")delete c.guests;else c.guests=Math.max(0,Math.floor(+v)||0)}
+  else if(t.dataset.sp!==undefined){const a=[...document.querySelectorAll("#edSp input")].map(i=>i.value.trim());while(a.length&&!a[a.length-1])a.pop();if(a.length)c.special=a;else delete c.special}
+  else{const f=t.id==="edWeather"?"weather":"event";if(v.trim())c[f]=v.trim();else delete c[f]}
+  if(!Object.keys(c).length)delete S.cal[k];
+  persist();refreshCell(k);
+});
+$("calHead").addEventListener("change",calLists);
+$("calList").addEventListener("click",e=>{const el=e.target.closest(".dc");if(el&&el.dataset.d!==S.cur){S.cur=el.dataset.d;soft()}});
+
+/* 팀 캘린더 CSV: 월·일 열로 날짜를 찾고, 값이 있는 칸만 덮어쓴다 */
+function parseCSV(t){
+  const R=[];let row=[],cur="",q=false;
+  for(let i=0;i<t.length;i++){const ch=t[i];
+    if(q){if(ch==='"'){if(t[i+1]==='"'){cur+='"';i++}else q=false}else cur+=ch}
+    else if(ch==='"')q=true;else if(ch===","||ch==="\t"){row.push(cur);cur=""}
+    else if(ch==="\n"){row.push(cur);R.push(row);row=[];cur=""}else if(ch!=="\r")cur+=ch}
+  if(cur||row.length){row.push(cur);R.push(row)}
+  return R;
+}
+function importCal(text){
+  const rows=parseCSV(text);if(rows.length<2)return 0;
+  const head=rows[0].map(h=>h.replace(/\s/g,"")),find=w=>head.findIndex(h=>h.includes(w));
+  const im=head.indexOf("월"),id=head.indexOf("일"),iw=find("요일"),io=find("영업"),ig=find("일반"),iwx=find("날씨"),iev=find("이벤트");
+  const isp=head.map((h,i)=>h.includes("특별")?i:-1).filter(i=>i>=0);
+  const inRange=new Set(dates());let n=0,out=0;
+  for(const r of rows.slice(1)){
+    const g=i=>i>=0&&r[i]!==undefined?String(r[i]).trim():"";
+    let m=+g(im),d=+g(id);
+    if(!(m&&d)){const x=r.join(" ").match(/(\d{1,2})월\s*(\d{1,2})일/);if(x){m=+x[1];d=+x[2]}}
+    if(!(m>=1&&m<=12&&d>=1&&d<=31))continue;
+    const k=pad(m)+"-"+pad(d),c=S.cal[k]||(S.cal[k]={});
+    if(g(iw).length===1&&DOW.includes(g(iw)))c.dow=g(iw);
+    if(g(io)==="-1")c.closed=true;else if(g(io)==="1")delete c.closed;
+    if(g(ig)!==""&&!isNaN(+g(ig)))c.guests=Math.max(0,Math.floor(+g(ig)));
+    const sp=isp.map(i=>g(i)==="-1"?"":g(i));while(sp.length&&!sp[sp.length-1])sp.pop();if(sp.length)c.special=sp;
+    if(g(iwx))c.weather=g(iwx);if(g(iev))c.event=g(iev);
+    if(!Object.keys(c).length)delete S.cal[k];
+    n++;if(!inRange.has(k))out++;
+  }
+  return{n,out};
+}
+
+function all(){renderSettings();renderDates();renderGrid();renderLists();renderCal();persist()}
+function soft(){renderDates();renderGrid();renderLists();calMark();persist()}
 
 function setMode(m){mode=m;document.body.dataset.mode=m;document.querySelectorAll("#modes button").forEach(b=>b.setAttribute("aria-pressed",b.dataset.mode===m))}
 $("modes").onclick=e=>{const b=e.target.closest("button");if(b)setMode(b.dataset.mode)};
@@ -353,7 +506,7 @@ grid.addEventListener("click",e=>{
     renderSettings();soft();return;
   }
   if(!S.grid[p.r][p.c])return;
-  if(S.fixed[k]&&fixOn(S.fixed[k],S.slot)){toast("고정 NPC 칸입니다. 꾹 눌러서 수정하세요.");return}
+  if(S.fixed[k]&&fixOn(S.fixed[k],S.slot,S.cur)){toast("고정 NPC 칸입니다. 꾹 눌러서 수정하세요.");return}
   const dd=S.daily[S.cur]||(S.daily[S.cur]={}),d=dd[S.slot]||(dd[S.slot]={});
   if(d[k])delete d[k];
   else{const used=new Set(Object.values(d).map(v=>v.name));let n=1;while(used.has("NPC "+n))n++;d[k]={name:"NPC "+n}}
@@ -376,8 +529,9 @@ function copy(txt,title){
   try{navigator.clipboard.writeText(txt).then(()=>toast("복사했습니다. 엑셀에서 붙여 넣으세요."),fb)}catch(e){fb()}
 }
 $("copyDay").onclick=()=>copy(tsv(slotRows(S.cur,S.slot)),dLabel(S.cur));
-$("copyFix").onclick=()=>copy(tsv(Object.keys(S.fixed).map(k=>{const p=xyOf(k);return[clean(S.fixed[k].name),p.x,p.y,clean(fixSlotTxt(S.fixed[k]))]})),"고정 NPC");
+$("copyFix").onclick=()=>copy(tsv(Object.keys(S.fixed).map(k=>{const p=xyOf(k);return[clean(S.fixed[k].name),p.x,p.y,clean(fixSlotTxt(S.fixed[k])),fmtEx(S.fixed[k].except)]})),"고정 NPC");
 $("copyAll").onclick=()=>{const R=[];for(const k of dates())for(const t of S.slots)for(const r of slotRows(k,t.id))R.push([dLabel(k),clean(t.name),...r]);copy(tsv(R),"전체 날짜")};
+$("copyCal").onclick=()=>copy(tsv(dates().map(k=>{const c=S.cal[k]||{},sp=(c.special||[]).map(clean);while(sp.length<4)sp.push("");return[dLabel(k),DOW[calDow[k]]||"",c.closed?-1:1,c.guests??"",clean(c.weather||""),clean(c.event||""),...sp]})),"캘린더");
 $("txtClose").onclick=()=>$("txtDlg").close();
 
 /* ---- 고정 NPC ---- */
@@ -396,7 +550,7 @@ function openFix(k){
   $("fixIconTxt").value=f&&!ICONS.includes(f.icon)?f.icon:"";
   $("fixRemove").style.display=f?"":"none";
   $("fixSlots").innerHTML=S.slots.map((t,i)=>`<label><input type="checkbox" id="fixSlot${i}" value="${esc(t.id)}"${!f||fixOn(f,t.id)?" checked":""}> ${esc(t.name)}</label>`).join("");
-  $("fixSlotBox").style.display=S.slots.length>1?"":"none";$("fixErr").textContent="";
+  $("fixSlotBox").style.display=S.slots.length>1?"":"none";$("fixErr").textContent="";$("fixEx").value=f?fmtEx(f.except):"";
   markPicks();$("fixDlg").showModal();$("fixName").focus();
 }
 $("fixCols").onclick=e=>{const b=e.target.closest("button");if(b){fixCol=b.dataset.v;markPicks()}};
@@ -408,11 +562,13 @@ $("fixForm").onsubmit=e=>{
   if(!on.length){$("fixErr").textContent="등장 시각을 하나 이상 고르세요.";return}
   const nf={name:$("fixName").value.trim()||"고정 NPC",color:fixCol,icon:fixIcon};
   if(on.length<S.slots.length)nf.slots=on;
+  const ex=parseEx($("fixEx").value);if(ex.length)nf.except=ex;
   S.fixed[fixK]=nf;
-  for(const d in S.daily)for(const sid in S.daily[d])if(fixOn(nf,sid))delete S.daily[d][sid][fixK];
+  for(const d in S.daily)for(const sid in S.daily[d])if(fixOn(nf,sid,d))delete S.daily[d][sid][fixK];
   $("fixDlg").close();soft();
 };
 $("fixRemove").onclick=()=>{delete S.fixed[fixK];$("fixDlg").close();soft()};
+$("fixExNow").onclick=()=>{const a=parseEx($("fixEx").value);if(!a.includes(S.cur))a.push(S.cur);$("fixEx").value=fmtEx(a.sort())};
 $("fixCancel").onclick=()=>$("fixDlg").close();
 
 /* ---- 설정 ---- */
@@ -457,19 +613,24 @@ $("fileIn").onchange=e=>{
   const f=e.target.files[0];if(!f)return;
   const r=new FileReader();
   r.onload=()=>{
-    const t=String(r.result).replace(/^﻿/,"");
+    let t;try{t=new TextDecoder("utf-8",{fatal:true}).decode(r.result)}catch(x){t=new TextDecoder("euc-kr").decode(r.result)}
+    t=t.replace(/^﻿/,"");
     if(t.trim().startsWith("{")){
       try{const o=JSON.parse(t);if(!o.grid||!o.grid.length||!o.range)throw 0;S=Object.assign(fresh(o.grid),migrate(o));S.example=false;all();toast("저장 파일을 불러왔습니다.")}
       catch(x){toast("저장 파일을 읽지 못했습니다. 이 도구에서 받은 .json 파일인지 확인하세요.")}
+    }else if(/[^01\s,;]/.test(t.trim().split(/\r?\n/)[0])){
+      const res=importCal(t);
+      if(!res||!res.n){toast("캘린더 CSV에서 날짜(월·일 열)를 찾지 못했습니다.");return}
+      all();toast("캘린더 "+res.n+"일을 채웠습니다."+(res.out?" 날짜 범위 밖 "+res.out+"일은 범위를 넓히면 보입니다.":""));
     }else{
       const g=parseText(t);
       if(!g.length||!g[0].length){toast("0과 1로 된 줄을 찾지 못했습니다.");return}
-      const keep={cell:S.cell,cellOp:S.cellOp,year:S.year,range:S.range,cur:S.cur,bg:S.bg,leftW:S.leftW,xDir:S.xDir,yDir:S.yDir,slots:S.slots,slot:S.slot};
+      const keep={cell:S.cell,cellOp:S.cellOp,year:S.year,range:S.range,cur:S.cur,bg:S.bg,leftW:S.leftW,xDir:S.xDir,yDir:S.yDir,slots:S.slots,slot:S.slot,cal:S.cal,calW:S.calW};
       S=Object.assign(fresh(g),keep);if(S.yDir===1)S.origin={c:0,r:0};
       all();toast("맵을 만들었습니다: "+cols()+" × "+rows()+"칸");
     }
   };
-  r.readAsText(f);e.target.value="";
+  r.readAsArrayBuffer(f);e.target.value="";
 };
 $("saveBtn").onclick=async()=>{
   const data=JSON.stringify(S),filename="npc-coords.json";
@@ -484,6 +645,13 @@ $("saveBtn").onclick=async()=>{
 $("grip").addEventListener("pointerdown",e=>{
   e.target.setPointerCapture(e.pointerId);
   const mv=v=>{S.leftW=Math.round(Math.max(190,v.clientX));document.documentElement.style.setProperty("--left-w",S.leftW+"px")};
+  const up=()=>{e.target.removeEventListener("pointermove",mv);e.target.removeEventListener("pointerup",up);persist()};
+  e.target.addEventListener("pointermove",mv);e.target.addEventListener("pointerup",up);
+});
+
+$("grip2").addEventListener("pointerdown",e=>{
+  e.target.setPointerCapture(e.pointerId);
+  const mv=v=>{S.calW=Math.round(Math.max(260,v.clientX-$("cal").getBoundingClientRect().left));$("cal").style.flex="0 0 "+S.calW+"px";$("mapPane").style.flex="1 1 0"};
   const up=()=>{e.target.removeEventListener("pointermove",mv);e.target.removeEventListener("pointerup",up);persist()};
   e.target.addEventListener("pointermove",mv);e.target.addEventListener("pointerup",up);
 });
