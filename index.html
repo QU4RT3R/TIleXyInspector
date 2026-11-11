@@ -102,9 +102,7 @@ td.nm[contenteditable]{cursor:text;border-radius:4px}
 td.nm[contenteditable]:hover{background:var(--bg)}
 td.coord{text-align:right;font-size:12px;width:1px;white-space:nowrap}
 td .x{border:0;background:none;color:var(--dim);cursor:pointer;padding:0 4px}
-#slotRows{display:flex;flex-direction:column;gap:6px}
-#slotRows div{display:flex;gap:6px}
-#slotRows input{flex:1}
+#slotSeg button{min-width:44px}
 .sw{width:14px;height:14px;border-radius:3px;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:10px;color:var(--cell-ink)}
 .empty{color:var(--dim);font-size:12px}
 dialog{border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--ink);padding:16px;width:min(360px,calc(100% - 32px))}
@@ -134,17 +132,6 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
 <body data-mode="place">
 <header>
   <h1>NPC 좌표 설정기</h1>
-  <div class="grp">
-    <span class="lbl">날짜</span>
-    <button class="btn" id="prevDay" aria-label="이전 날짜">◀</button>
-    <select id="dateSel" aria-label="날짜 선택"></select>
-    <button class="btn" id="nextDay" aria-label="다음 날짜">▶</button>
-  </div>
-  <div class="grp">
-    <span class="lbl">등장 시각</span>
-    <select id="slotSel" aria-label="등장 시각 선택"></select>
-    <button class="btn" id="slotEdit">목록 편집</button>
-  </div>
   <div class="grp">
     <span class="lbl">클릭 동작</span>
     <div class="seg" id="modes">
@@ -197,7 +184,7 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
   <div id="stage">
     <div id="cal">
       <div id="calHead">
-        <div class="row"><strong id="edTitle"></strong><label class="chk" for="edClosed"><input type="checkbox" id="edClosed"> 휴무</label><button class="btn" id="copyCal" style="margin-left:auto">엑셀용 복사</button></div>
+        <div class="row"><strong id="edTitle"></strong><label class="chk" for="edClosed"><input type="checkbox" id="edClosed"> 휴무</label><div class="seg" id="slotSeg" role="group" aria-label="등장 시각"></div><button class="btn" id="copyCal" style="margin-left:auto">엑셀용 복사</button></div>
         <div class="edg">
           <label for="edGuests">일반 손님 수<input type="number" id="edGuests" min="0"></label>
           <label for="edWeather">날씨<input type="text" id="edWeather" list="wxList"></label>
@@ -247,18 +234,6 @@ textarea{width:100%;height:160px;font:12px var(--mono);background:var(--bg);colo
     </div>
   </form>
 </dialog>
-<dialog id="slotDlg">
-  <form id="slotForm">
-    <h3>등장 시각 목록</h3>
-    <p class="hint">하루를 나눌 시각 이름을 적으세요 (예: 아침, 낮, 밤). 삭제한 시각에 배치한 NPC도 함께 지워집니다.</p>
-    <div id="slotRows"></div>
-    <div class="row"><button type="button" class="btn" id="slotAdd">+ 시각 추가</button></div>
-    <div class="row" style="justify-content:flex-end">
-      <button type="button" class="btn" id="slotCancel">취소</button>
-      <button type="submit" class="btn pri">저장</button>
-    </div>
-  </form>
-</dialog>
 <dialog id="txtDlg">
   <h3 id="txtTitle"></h3>
   <p class="hint" id="txtHint"></p>
@@ -272,6 +247,7 @@ const $=id=>document.getElementById(id);
 const COLORS=[["노랑","#ffe89a"],["주황","#ffc993"],["보라","#d6c4f5"],["분홍","#f9c0dc"],["베이지","#e3cfb4"],["회색","#d0d3da"]];
 const ICONS=["★","♥","◆","●","▲","♣","♪","☕","🏠","🛒","⚔","🎣","🌱","📦","🔨","💤"];
 const LS="npc-coord-setter-v1";
+const SLOTS=[{id:"pre",name:"전"},{id:"open",name:"영업"},{id:"post",name:"후"}];
 const EXAMPLE=["1111111100111111","1111111100111111","1100111111111001","1100111111111001","1111110011111111","1111110011111111","0011111111110011","0011111111110011","1111111111111111","1111111111111111"];
 
 function parseText(t){
@@ -281,23 +257,38 @@ function parseText(t){
   return rows;
 }
 function fresh(grid,example){
-  return {v:4,calW:null,cal:{},slots:[{id:"s1",name:"하루 종일"}],slot:"s1",example:!!example,grid,cell:32,cellOp:100,origin:{c:0,r:grid.length-1},xDir:1,yDir:-1,
+  return {v:5,calW:null,cal:{},slots:SLOTS.map(t=>({...t})),slot:"open",example:!!example,grid,cell:32,cellOp:100,origin:{c:0,r:grid.length-1},xDir:1,yDir:-1,
     year:new Date().getFullYear(),range:{sm:8,sd:1,em:8,ed:31},cur:"08-01",daily:{},fixed:{},bg:null,leftW:null};
 }
 let S=fresh(parseText(EXAMPLE.join("\n")),true);
-S.daily["08-01"]={s1:{"3,8":{name:"우체부"},"10,4":{name:"꽃집 손님"}}};
-/* v1 저장 파일(등장 시각 없음)을 v2로 올린다: 기존 배치는 첫 시각 "하루 종일"로 들어간다 */
+S.daily["08-01"]={open:{"3,8":{name:"우체부"},"10,4":{name:"꽃집 손님"}}};
+/* 예전 세이브를 현재 형식(v5)으로 올린다.
+   v1: 등장 시각 없음 → 전부 "영업"
+   v2~v4: 사용자가 만든 시각 목록 → 이름에 "전"이 있으면 전, "후"가 있으면 후, 나머지(하루 종일 등)는 영업 */
+function slotMap(name){name=String(name||"");return name.includes("전")?"pre":name.includes("후")?"post":"open"}
 function migrate(o){
   if(!o.daily||typeof o.daily!=="object")o.daily={};
-  if(!Array.isArray(o.slots)||!o.slots.length){
-    o.slots=[{id:"s1",name:"하루 종일"}];
-    const nd={};for(const d in o.daily)nd[d]={s1:o.daily[d]||{}};
-    o.daily=nd;
-  }
-  if(!o.slots.some(s=>s.id===o.slot))o.slot=o.slots[0].id;
   if(!o.fixed)o.fixed={};
+  const ids=Array.isArray(o.slots)?o.slots.map(t=>t.id).join():"";
+  if(ids!=="pre,open,post"){
+    const map={};
+    if(Array.isArray(o.slots)&&o.slots.length){for(const t of o.slots)map[t.id]=slotMap(t.name)}
+    const nd={};
+    for(const d in o.daily){
+      const src=o.daily[d]||{},out={pre:{},open:{},post:{}};
+      if(map&&Object.keys(map).length){for(const sid in src){const to=map[sid]||"open";for(const k in src[sid]||{})if(!out[to][k])out[to][k]=src[sid][k]}}
+      else Object.assign(out.open,src);
+      for(const t in out)if(!Object.keys(out[t]).length)delete out[t];
+      nd[d]=out;
+    }
+    o.daily=nd;
+    for(const k in o.fixed){const f=o.fixed[k];if(Array.isArray(f.slots)){const a=[...new Set(f.slots.map(id=>map[id]||"open"))];if(a.length>=3)delete f.slots;else f.slots=SLOTS.map(t=>t.id).filter(id=>a.includes(id))}}
+    o.slot=map[o.slot]||"open";
+  }
+  o.slots=SLOTS.map(t=>({...t}));
+  if(!o.slots.some(t=>t.id===o.slot))o.slot="open";
   if(!o.cal||typeof o.cal!=="object")o.cal={};
-  o.v=4;return o;
+  o.v=5;return o;
 }
 S.fixed["7,9"]={name:"촌장",color:"#ffe89a",icon:"★"};
 S.cal["08-01"]={guests:12,weather:"맑음",event:"여름 축제",special:["haru","mint"]};
@@ -367,9 +358,8 @@ function renderLists(){
 }
 function renderDates(){
   const ds=dates();if(!ds.includes(S.cur))S.cur=ds[0];
-  $("dateSel").innerHTML=ds.map(k=>`<option value="${k}"${k===S.cur?" selected":""}>${dLabel(k)}${Object.values(S.daily[k]||{}).some(has)?" ·":""}</option>`).join("");
   const dd=S.daily[S.cur]||{};
-  $("slotSel").innerHTML=S.slots.map(t=>`<option value="${esc(t.id)}"${t.id===S.slot?" selected":""}>${esc(t.name)}${has(dd[t.id])?" ·":""}</option>`).join("");
+  $("slotSeg").innerHTML=S.slots.map(t=>`<button type="button" data-slot="${t.id}" aria-pressed="${t.id===S.slot}" title="${has(dd[t.id])?"NPC 배치 있음":""}">${esc(t.name)}${has(dd[t.id])?" ·":""}</button>`).join("");
   $("rangeInfo").textContent="총 "+ds.length+"일";
 }
 function fillDays(sel,m,v){sel.innerHTML=Array.from({length:dim(m)},(_,i)=>`<option${i+1===v?" selected":""}>${i+1}</option>`).join("")}
@@ -530,7 +520,7 @@ function copy(txt,title){
 }
 $("copyDay").onclick=()=>copy(tsv(slotRows(S.cur,S.slot)),dLabel(S.cur));
 $("copyFix").onclick=()=>copy(tsv(Object.keys(S.fixed).map(k=>{const p=xyOf(k);return[clean(S.fixed[k].name),p.x,p.y,clean(fixSlotTxt(S.fixed[k])),fmtEx(S.fixed[k].except)]})),"고정 NPC");
-$("copyAll").onclick=()=>{const R=[];for(const k of dates())for(const t of S.slots)for(const r of slotRows(k,t.id))R.push([dLabel(k),clean(t.name),...r]);copy(tsv(R),"전체 날짜")};
+$("copyAll").onclick=()=>{const R=[];for(const k of dates())for(const t of S.slots)for(const r of slotRows(k,t.id))R.push([...r,dLabel(k),clean(t.name)]);copy(tsv(R),"전체 날짜")};
 $("copyCal").onclick=()=>copy(tsv(dates().map(k=>{const c=S.cal[k]||{},sp=(c.special||[]).map(clean);while(sp.length<4)sp.push("");return[dLabel(k),DOW[calDow[k]]||"",c.closed?-1:1,c.guests??"",clean(c.weather||""),clean(c.event||""),...sp]})),"캘린더");
 $("txtClose").onclick=()=>$("txtDlg").close();
 
@@ -572,26 +562,7 @@ $("fixExNow").onclick=()=>{const a=parseEx($("fixEx").value);if(!a.includes(S.cu
 $("fixCancel").onclick=()=>$("fixDlg").close();
 
 /* ---- 설정 ---- */
-$("dateSel").onchange=e=>{S.cur=e.target.value;soft()};
-$("slotSel").onchange=e=>{S.slot=e.target.value;soft()};
-let slotDraft=[];
-function drawSlots(){$("slotRows").innerHTML=slotDraft.map((t,i)=>`<div><input type="text" id="slotName${i}" data-i="${i}" value="${esc(t.name)}" maxlength="30" aria-label="시각 이름"><button type="button" class="btn" data-rm="${i}" aria-label="삭제"${slotDraft.length<2?" disabled":""}>✕</button></div>`).join("")}
-$("slotEdit").onclick=()=>{slotDraft=S.slots.map(t=>({id:t.id,name:t.name}));drawSlots();$("slotDlg").showModal()};
-$("slotRows").addEventListener("input",e=>{const i=e.target.dataset.i;if(i!==undefined)slotDraft[i].name=e.target.value});
-$("slotRows").addEventListener("click",e=>{const i=e.target.dataset.rm;if(i!==undefined&&slotDraft.length>1){slotDraft.splice(+i,1);drawSlots()}});
-$("slotAdd").onclick=()=>{slotDraft.push({id:"s"+Date.now().toString(36)+slotDraft.length,name:""});drawSlots();const el=$("slotName"+(slotDraft.length-1));if(el)el.focus()};
-$("slotCancel").onclick=()=>$("slotDlg").close();
-$("slotForm").onsubmit=e=>{
-  e.preventDefault();
-  const list=slotDraft.map((t,i)=>({id:t.id,name:t.name.trim()||"시각 "+(i+1)}));
-  const keep=new Set(list.map(t=>t.id));
-  for(const d in S.daily)for(const sid in S.daily[d])if(!keep.has(sid))delete S.daily[d][sid];
-  for(const k in S.fixed){const f=S.fixed[k];if(Array.isArray(f.slots)){f.slots=f.slots.filter(id=>keep.has(id));if(!f.slots.length)delete S.fixed[k]}}
-  S.slots=list;if(!keep.has(S.slot))S.slot=list[0].id;
-  $("slotDlg").close();soft();
-};
-function step(n){const ds=dates(),i=ds.indexOf(S.cur)+n;if(i>=0&&i<ds.length){S.cur=ds[i];soft()}}
-$("prevDay").onclick=()=>step(-1);$("nextDay").onclick=()=>step(1);
+$("slotSeg").onclick=e=>{const b=e.target.closest("button");if(b&&b.dataset.slot!==S.slot){S.slot=b.dataset.slot;soft()}};
 $("orgSel").onchange=e=>{
   const v=e.target.value,L=cols()-1,B=rows()-1;
   if(v==="custom"){setMode("origin");toast("(0, 0)으로 삼을 칸을 누르세요.");return}
